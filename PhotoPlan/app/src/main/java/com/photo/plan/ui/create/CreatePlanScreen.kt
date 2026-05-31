@@ -173,12 +173,13 @@ fun CreatePlanScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            val hasImages = state.selectedUris.isNotEmpty() || state.existingSamples.isNotEmpty()
             Button(
                 onClick = { viewModel.savePlan(onNavigateToDetail) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
-                enabled = state.name.isNotBlank() && !state.isSaving,
+                enabled = hasImages && !state.isSaving,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Green500,

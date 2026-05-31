@@ -12,6 +12,9 @@ import com.photo.plan.data.repository.SampleRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class CreatePlanState(
     val name: String = "",
@@ -72,8 +75,16 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun savePlan(onSaved: (Long) -> Unit) {
-        val name = _state.value.name.trim()
-        if (name.isEmpty()) return
+        val rawName = _state.value.name.trim()
+        val name = if (rawName.isEmpty()) {
+            val dateFormat = SimpleDateFormat("yyyy年M月d日策划", Locale.CHINESE)
+            dateFormat.format(Date())
+        } else {
+            rawName
+        }
+
+        val hasImages = _state.value.selectedUris.isNotEmpty() || _state.value.existingSamples.isNotEmpty()
+        if (!hasImages) return
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true)
@@ -82,10 +93,12 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 val planId = if (_state.value.isEditMode) {
                     val pid = _state.value.planId
                     if (pid != null) {
-                        val existing = planRepository.getPlanById(pid)!!
-                        planRepository.updatePlan(
-                            existing.copy(name = name, updatedAt = System.currentTimeMillis())
-                        )
+                        val existing = planRepository.getPlanById(pid)
+                        if (existing != null) {
+                            planRepository.updatePlan(
+                                existing.copy(name = name, updatedAt = System.currentTimeMillis())
+                            )
+                        }
                         pid
                     } else {
                         planRepository.insertPlan(PlanEntity(name = name))
