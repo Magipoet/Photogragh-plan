@@ -31,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -40,6 +40,7 @@ import coil3.compose.AsyncImage
 import com.photo.plan.data.local.entity.SampleEntity
 import com.photo.plan.ui.detail.DetailViewModel
 import com.photo.plan.ui.theme.White
+import kotlin.math.sqrt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,10 +98,7 @@ fun ImageViewerScreen(
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
                     val sample = samples.getOrNull(page) ?: return@HorizontalPager
-                    ZoomableImage(
-                        sample = sample,
-                        pagerState = pagerState
-                    )
+                    ZoomableImage(sample = sample)
                 }
             }
         }
@@ -108,10 +106,7 @@ fun ImageViewerScreen(
 }
 
 @Composable
-private fun ZoomableImage(
-    sample: SampleEntity,
-    pagerState: PagerState
-) {
+private fun ZoomableImage(sample: SampleEntity) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
@@ -120,68 +115,72 @@ private fun ZoomableImage(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                var previousCenter: Offset? = null
-                var previousDistance = 0f
+                var lastTouchCount = 0
+                var lastDistance = 0f
+                var lastCenter = Offset.Zero
 
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    val activeChanges = event.changes.filter { it.pressed }
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val changes = event.changes
+                        val pressedChanges = changes.filter { c -> c.pressed }
+                        val touchCount = pressedChanges.size
 
-                    if (activeChanges.isEmpty()) {
-                        previousCenter = null
-                        previousDistance = 0f
-                        if (scale <= 1.01f) {
-                            scale = 1f
-                            offsetX = 0f
-                            offsetY = 0f
-                        }
-                        continue
-                    }
+                        when (event.type) {
+                            PointerEventType.Press,
+                            PointerEventType.Move -> {
+                                if (touchCount >= 2) {
+                                    val p1 = pressedChanges[0].position
+                                    val p2 = pressedChanges[1].position
+                                    val currentDistance = distanceBetween(p1, p2)
+                                    val currentCenter = centerOf(p1, p2)
 
-                    when {
-                        activeChanges.size >= 2 -> {
-                            val center = activeChanges.map { it.position }
-                                .reduce { a, b -> a + b } / activeChanges.size
-                            val distance = (activeChanges[0].position - activeChanges[1].position)
-                                .getDistance().coerceAtLeast(1f)
+                                    if (lastTouchCount >= 2 && lastDistance > 0f) {
+                                        val zoom = currentDistance / lastDistance
+                                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                        val pan = currentCenter - lastCenter
 
-                            if (previousDistance > 1f && previousCenter != null) {
-                                val zoom = distance / previousDistance
-                                val pan = center - previousCenter
-                                val newScale = (scale * zoom).coerceIn(1f, 5f)
-                                scale = newScale
-                                if (newScale > 1.01f) {
-                                    val maxX = (newScale - 1) * size.width / 2
-                                    val maxY = (newScale - 1) * size.height / 2
-                                    offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
-                                    offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
-                                } else {
-                                    offsetX = 0f
-                                    offsetY = 0f
+                                        scale = newScale
+                                        if (newScale > 1.01f) {
+                                            val maxX = (newScale - 1) * size.width / 2
+                                            val maxY = (newScale - 1) * size.height / 2
+                                            offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                            offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                        } else {
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        }
+                                    }
+
+                                    lastDistance = currentDistance
+                                    lastCenter = currentCenter
+                                    changes.forEach { it.consume() }
+                                } else if (touchCount == 1 && scale > 1.01f) {
+                                    val change = pressedChanges[0]
+                                    if (lastTouchCount == 1) {
+                                        val pan = change.position - change.previousPosition
+                                        val maxX = (scale - 1) * size.width / 2
+                                        val maxY = (scale - 1) * size.height / 2
+                                        offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                        offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                    }
+                                    change.consume()
+                                }
+
+                                lastTouchCount = touchCount
+                            }
+                            PointerEventType.Release -> {
+                                if (touchCount == 0) {
+                                    lastTouchCount = 0
+                                    lastDistance = 0f
+                                    if (scale <= 1.01f) {
+                                        scale = 1f
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    }
                                 }
                             }
-
-                            previousDistance = distance
-                            previousCenter = center
-                            activeChanges.forEach { it.consume() }
-                        }
-                        activeChanges.size == 1 && scale > 1.01f -> {
-                            val change = activeChanges[0]
-                            val currentPos = change.position
-                            if (previousCenter != null) {
-                                val pan = currentPos - previousCenter
-                                val maxX = (scale - 1) * size.width / 2
-                                val maxY = (scale - 1) * size.height / 2
-                                offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
-                                offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
-                            }
-                            previousCenter = currentPos
-                            previousDistance = 0f
-                            change.consume()
-                        }
-                        else -> {
-                            previousCenter = activeChanges[0].position
-                            previousDistance = 0f
+                            else -> { lastTouchCount = touchCount }
                         }
                     }
                 }
@@ -202,4 +201,14 @@ private fun ZoomableImage(
             contentScale = ContentScale.Fit
         )
     }
+}
+
+private fun distanceBetween(a: Offset, b: Offset): Float {
+    val dx = a.x - b.x
+    val dy = a.y - b.y
+    return sqrt(dx * dx + dy * dy)
+}
+
+private fun centerOf(a: Offset, b: Offset): Offset {
+    return Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
 }
