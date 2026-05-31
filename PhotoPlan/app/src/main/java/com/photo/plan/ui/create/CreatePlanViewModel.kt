@@ -79,13 +79,17 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
             _state.value = _state.value.copy(isSaving = true)
 
             try {
-                val planId = if (_state.value.isEditMode && _state.value.planId != null) {
+                val planId = if (_state.value.isEditMode) {
                     val pid = _state.value.planId
-                    val existing = planRepository.getPlanById(pid)!!
-                    planRepository.updatePlan(
-                        existing.copy(name = name, updatedAt = System.currentTimeMillis())
-                    )
-                    pid
+                    if (pid != null) {
+                        val existing = planRepository.getPlanById(pid)!!
+                        planRepository.updatePlan(
+                            existing.copy(name = name, updatedAt = System.currentTimeMillis())
+                        )
+                        pid
+                    } else {
+                        planRepository.insertPlan(PlanEntity(name = name))
+                    }
                 } else {
                     planRepository.insertPlan(PlanEntity(name = name))
                 }
