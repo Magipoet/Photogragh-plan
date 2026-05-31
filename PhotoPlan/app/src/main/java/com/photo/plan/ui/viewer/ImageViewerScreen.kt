@@ -118,11 +118,14 @@ private fun ZoomableImage(sample: SampleEntity) {
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(1f, 5f)
-                        if (scale > 1f) {
+                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                        scale = newScale
+                        if (newScale > 1.01f) {
+                            val maxX = (newScale - 1) * size.width / 2
+                            val maxY = (newScale - 1) * size.height / 2
                             offset = Offset(
-                                x = offset.x + pan.x,
-                                y = offset.y + pan.y
+                                x = (offset.x + pan.x).coerceIn(-maxX, maxX),
+                                y = (offset.y + pan.y).coerceIn(-maxY, maxY)
                             )
                         } else {
                             offset = Offset.Zero
