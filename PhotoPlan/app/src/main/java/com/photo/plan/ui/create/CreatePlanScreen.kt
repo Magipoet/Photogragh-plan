@@ -321,7 +321,7 @@ private fun AddPhotoButton(onClick: () -> Unit) {
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "从相册选择图片（可多选）",
+            text = "从相册中选择图片（可长按多选）",
             style = MaterialTheme.typography.bodyLarge,
             color = Green500
         )
