@@ -41,4 +41,7 @@ interface SampleDao {
 
     @Query("SELECT COUNT(*) FROM samples WHERE planId = :planId AND isCompleted = 1")
     suspend fun getCompletedCount(planId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM samples")
+    fun getTotalSampleCount(): Flow<Int>
 }

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -293,7 +294,7 @@ private fun SampleCard(
                 ) {
                     if (sample.isCompleted) {
                         Icon(
-                            Icons.Filled.Check,
+                            Icons.Filled.Close,
                             contentDescription = "取消完成",
                             tint = White,
                             modifier = Modifier.size(18.dp)

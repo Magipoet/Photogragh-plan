@@ -9,6 +9,7 @@ import com.photo.plan.data.repository.PlanRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -16,7 +17,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val planRepository = PlanRepository((application as PhotoPlanApp).database.planDao())
     private val sampleDao = (application as PhotoPlanApp).database.sampleDao()
 
-    val plans: StateFlow<List<PlanEntity>> = planRepository.getAllPlans()
+    val plans: StateFlow<List<PlanEntity>> = combine(
+        planRepository.getAllPlans(),
+        sampleDao.getTotalSampleCount()
+    ) { plans, _ -> plans }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _planProgressMap = MutableStateFlow<Map<Long, Pair<Int, Int>>>(emptyMap())
