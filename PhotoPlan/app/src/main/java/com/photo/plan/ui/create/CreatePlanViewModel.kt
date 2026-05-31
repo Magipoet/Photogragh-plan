@@ -2,6 +2,7 @@ package com.photo.plan.ui.create
 
 import android.app.Application
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.photo.plan.PhotoPlanApp
@@ -9,9 +10,13 @@ import com.photo.plan.data.local.entity.PlanEntity
 import com.photo.plan.data.local.entity.SampleEntity
 import com.photo.plan.data.repository.PlanRepository
 import com.photo.plan.data.repository.SampleRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.InputStream
 
 data class CreatePlanState(
     val name: String = "",
@@ -53,9 +58,51 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun addUris(uris: List<Uri>) {
-        val current = _state.value.selectedUris.toMutableList()
-        current.addAll(uris)
-        _state.value = _state.value.copy(selectedUris = current)
+        viewModelScope.launch {
+            val currentState = _state.value
+            val current = currentState.selectedUris.toMutableList()
+            val existing = currentState.existingSamples
+
+            val distinctNewUris = uris.distinctBy { it.toString() }
+
+            for (uri in distinctNewUris) {
+                val isDuplicateInSelected = current.any { it.toString() == uri.toString() }
+                if (isDuplicateInSelected) continue
+
+                val isDuplicateInExisting = withContext(Dispatchers.IO) {
+                    isUriDuplicateOfExisting(uri, existing)
+                }
+                if (isDuplicateInExisting) continue
+
+                current.add(uri)
+            }
+
+            _state.value = currentState.copy(selectedUris = current)
+        }
+    }
+
+    private fun isUriDuplicateOfExisting(uri: Uri, existing: List<SampleEntity>): Boolean {
+        return try {
+            val context = getApplication<Application>()
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
+                    val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (sizeIndex != -1 && nameIndex != -1) {
+                        val newSize = it.getLong(sizeIndex)
+                        val newName = it.getString(nameIndex)
+                        return existing.any { sample ->
+                            val file = File(sample.localPath)
+                            file.exists() && file.length() == newSize && file.name == newName
+                        }
+                    }
+                }
+            }
+            false
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun removeUri(index: Int) {
