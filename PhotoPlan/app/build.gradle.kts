@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.photo.plan"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.photo.plan"
