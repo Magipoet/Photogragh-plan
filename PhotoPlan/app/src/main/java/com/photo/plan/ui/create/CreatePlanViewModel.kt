@@ -12,9 +12,6 @@ import com.photo.plan.data.repository.SampleRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 data class CreatePlanState(
     val name: String = "",
@@ -22,7 +19,8 @@ data class CreatePlanState(
     val existingSamples: List<SampleEntity> = emptyList(),
     val isSaving: Boolean = false,
     val isEditMode: Boolean = false,
-    val planId: Long? = null
+    val planId: Long? = null,
+    val showNamePrompt: Boolean = false
 )
 
 class CreatePlanViewModel(application: Application) : AndroidViewModel(application) {
@@ -75,16 +73,17 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun savePlan(onSaved: (Long) -> Unit) {
-        val rawName = _state.value.name.trim()
-        val name = if (rawName.isEmpty()) {
-            val dateFormat = SimpleDateFormat("yyyy年M月d日策划", Locale.CHINESE)
-            dateFormat.format(Date())
-        } else {
-            rawName
-        }
+        val name = _state.value.name.trim()
 
         val hasImages = _state.value.selectedUris.isNotEmpty() || _state.value.existingSamples.isNotEmpty()
         if (!hasImages) return
+
+        if (name.isEmpty()) {
+            _state.value = _state.value.copy(showNamePrompt = true)
+            return
+        }
+
+        _state.value = _state.value.copy(showNamePrompt = false)
 
         viewModelScope.launch {
             _state.value = _state.value.copy(isSaving = true)
@@ -122,5 +121,9 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
                 _state.value = _state.value.copy(isSaving = false)
             }
         }
+    }
+
+    fun dismissNamePrompt() {
+        _state.value = _state.value.copy(showNamePrompt = false)
     }
 }

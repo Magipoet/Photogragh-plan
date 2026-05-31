@@ -52,9 +52,16 @@ fun ImageViewerScreen(
     val samples = uiState.samples
 
     val pagerState = rememberPagerState(
-        initialPage = initialIndex.coerceAtMost((samples.size - 1).coerceAtLeast(0)),
+        initialPage = 0,
         pageCount = { samples.size }
     )
+
+    LaunchedEffect(samples.size) {
+        if (samples.isNotEmpty()) {
+            val targetPage = initialIndex.coerceIn(0, samples.size - 1)
+            pagerState.scrollToPage(targetPage)
+        }
+    }
 
     Scaffold(
         topBar = {

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -198,6 +199,22 @@ fun CreatePlanScreen(
                     Text("保存策划")
                 }
             }
+        }
+
+        if (state.showNamePrompt) {
+            AlertDialog(
+                onDismissRequest = viewModel::dismissNamePrompt,
+                title = { Text("请填写策划名称") },
+                text = { Text("为了更好地管理您的摄影策划，请输入一个策划名称。") },
+                confirmButton = {
+                    Button(
+                        onClick = viewModel::dismissNamePrompt,
+                        colors = ButtonDefaults.buttonColors(containerColor = Green500)
+                    ) {
+                        Text("好的")
+                    }
+                }
+            )
         }
     }
 }
