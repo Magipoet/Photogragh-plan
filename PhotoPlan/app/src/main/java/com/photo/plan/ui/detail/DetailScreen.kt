@@ -63,7 +63,7 @@ import com.photo.plan.ui.theme.White
 fun DetailScreen(
     planId: Long,
     onNavigateBack: () -> Unit,
-    onNavigateToViewer: (Long, Int) -> Unit,
+    onNavigateToViewer: (Long, Int, Boolean) -> Unit,
     onNavigateToEdit: (Long) -> Unit,
     viewModel: DetailViewModel = viewModel()
 ) {
@@ -154,12 +154,12 @@ fun DetailScreen(
                         itemsIndexed(
                             incompleteSamples,
                             key = { _, s -> s.id }
-                        ) { _, sample ->
+                        ) { index, sample ->
                             SampleCard(
                                 sample = sample,
-                                globalIndex = samples.indexOf(sample),
+                                globalIndex = index,
                                 onClick = { viewModel.toggleCompleted(sample) },
-                                onViewImage = { idx -> onNavigateToViewer(planId, idx) }
+                                onViewImage = { idx -> onNavigateToViewer(planId, idx, false) }
                             )
                         }
                     }
@@ -171,12 +171,12 @@ fun DetailScreen(
                         itemsIndexed(
                             completedSamples,
                             key = { _, s -> s.id }
-                        ) { _, sample ->
+                        ) { index, sample ->
                             SampleCard(
                                 sample = sample,
-                                globalIndex = samples.indexOf(sample),
+                                globalIndex = index,
                                 onClick = { viewModel.toggleCompleted(sample) },
-                                onViewImage = { idx -> onNavigateToViewer(planId, idx) }
+                                onViewImage = { idx -> onNavigateToViewer(planId, idx, true) }
                             )
                         }
                     }

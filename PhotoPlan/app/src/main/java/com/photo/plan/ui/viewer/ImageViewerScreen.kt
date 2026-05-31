@@ -44,12 +44,14 @@ import kotlin.math.sqrt
 fun ImageViewerScreen(
     planId: Long,
     initialIndex: Int,
+    filterCompleted: Boolean,
     onNavigateBack: () -> Unit,
     detailViewModel: DetailViewModel = viewModel()
 ) {
     LaunchedEffect(planId) { detailViewModel.loadPlan(planId) }
     val uiState by detailViewModel.uiState.collectAsState()
-    val samples = uiState.samples
+    val allSamples = uiState.samples
+    val samples = allSamples.filter { it.isCompleted == filterCompleted }
 
     val pagerState = rememberPagerState(
         initialPage = 0,

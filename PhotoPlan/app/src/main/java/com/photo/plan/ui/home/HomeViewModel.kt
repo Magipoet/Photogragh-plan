@@ -6,10 +6,13 @@ import androidx.lifecycle.viewModelScope
 import com.photo.plan.PhotoPlanApp
 import com.photo.plan.data.local.entity.PlanEntity
 import com.photo.plan.data.repository.PlanRepository
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -17,28 +20,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val planRepository = PlanRepository((application as PhotoPlanApp).database.planDao())
     private val sampleDao = (application as PhotoPlanApp).database.sampleDao()
 
-    val plans: StateFlow<List<PlanEntity>> = combine(
-        planRepository.getAllPlans(),
-        sampleDao.getTotalSampleCount()
-    ) { plans, _ -> plans }
+    val plans: StateFlow<List<PlanEntity>> = planRepository.getAllPlans()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _planProgressMap = MutableStateFlow<Map<Long, Pair<Int, Int>>>(emptyMap())
-    val planProgressMap: StateFlow<Map<Long, Pair<Int, Int>>> = _planProgressMap
-
-    init {
-        viewModelScope.launch {
-            plans.collect { planList ->
-                val progressMap = mutableMapOf<Long, Pair<Int, Int>>()
-                planList.forEach { plan ->
-                    val total = sampleDao.getSampleCount(plan.id)
-                    val completed = sampleDao.getCompletedCount(plan.id)
-                    progressMap[plan.id] = Pair(total, completed)
+    val planProgressMap: StateFlow<Map<Long, Pair<Int, Int>>> =
+        plans
+            .map { planList -> planList.map { it.id } }
+            .flatMapLatest { planIds ->
+                if (planIds.isEmpty()) {
+                    flowOf(emptyMap())
+                } else {
+                    val countFlows = planIds.map { planId ->
+                        combine(
+                            sampleDao.getSampleCountByPlanId(planId),
+                            sampleDao.getCompletedCountByPlanId(planId)
+                        ) { total, completed ->
+                            planId to (total to completed)
+                        }
+                    }
+                    combine(countFlows) { pairs ->
+                        pairs.associate { it }
+                    }
                 }
-                _planProgressMap.value = progressMap
             }
-        }
-    }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun deletePlan(planId: Long) {
         viewModelScope.launch {

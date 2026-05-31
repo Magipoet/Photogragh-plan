@@ -16,11 +16,12 @@ object Routes {
     const val CREATE_PLAN = "create_plan"
     const val EDIT_PLAN = "edit_plan/{planId}"
     const val DETAIL = "detail/{planId}"
-    const val VIEWER = "viewer/{planId}/{sampleIndex}"
+    const val VIEWER = "viewer/{planId}/{sampleIndex}/{filterCompleted}"
 
     fun editPlan(planId: Long) = "edit_plan/$planId"
     fun detail(planId: Long) = "detail/$planId"
-    fun viewer(planId: Long, sampleIndex: Int) = "viewer/$planId/$sampleIndex"
+    fun viewer(planId: Long, sampleIndex: Int, filterCompleted: Boolean = false) =
+        "viewer/$planId/$sampleIndex/$filterCompleted"
 }
 
 @Composable
@@ -73,7 +74,7 @@ fun AppNavigation() {
             DetailScreen(
                 planId = planId,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToViewer = { pid, idx -> navController.navigate(Routes.viewer(pid, idx)) },
+                onNavigateToViewer = { pid, idx, filter -> navController.navigate(Routes.viewer(pid, idx, filter)) },
                 onNavigateToEdit = { pid -> navController.navigate(Routes.editPlan(pid)) }
             )
         }
@@ -82,14 +83,17 @@ fun AppNavigation() {
             route = Routes.VIEWER,
             arguments = listOf(
                 navArgument("planId") { type = NavType.LongType },
-                navArgument("sampleIndex") { type = NavType.IntType }
+                navArgument("sampleIndex") { type = NavType.IntType },
+                navArgument("filterCompleted") { type = NavType.BoolType }
             )
         ) { backStackEntry ->
             val planId = backStackEntry.arguments?.getLong("planId") ?: return@composable
             val sampleIndex = backStackEntry.arguments?.getInt("sampleIndex") ?: return@composable
+            val filterCompleted = backStackEntry.arguments?.getBoolean("filterCompleted") ?: false
             ImageViewerScreen(
                 planId = planId,
                 initialIndex = sampleIndex,
+                filterCompleted = filterCompleted,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
