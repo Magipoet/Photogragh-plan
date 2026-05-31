@@ -1,6 +1,7 @@
 package com.photo.plan.ui.create
 
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -80,6 +81,21 @@ fun CreatePlanScreen(
         contract = ActivityResultContracts.PickMultipleVisualMedia(),
         onResult = { uris -> viewModel.addUris(uris) }
     )
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+        onResult = { uris -> viewModel.addUris(uris) }
+    )
+
+    val launchImagePicker: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            photoPickerLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        } else {
+            documentPickerLauncher.launch(arrayOf("image/*"))
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -169,11 +185,7 @@ fun CreatePlanScreen(
                 }
 
                 AddPhotoButton(
-                    onClick = {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    }
+                    onClick = launchImagePicker
                 )
             }
 
@@ -309,7 +321,7 @@ private fun AddPhotoButton(onClick: () -> Unit) {
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "从相册选择图片",
+            text = "从相册选择图片（可多选）",
             style = MaterialTheme.typography.bodyLarge,
             color = Green500
         )
