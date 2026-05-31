@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,9 +21,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowBack
@@ -58,7 +60,7 @@ import com.photo.plan.ui.theme.Gray300
 import com.photo.plan.ui.theme.Gray500
 import com.photo.plan.ui.theme.Green500
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreatePlanScreen(
     planId: Long?,
@@ -98,87 +100,89 @@ fun CreatePlanScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
         ) {
-            OutlinedTextField(
-                value = state.name,
-                onValueChange = viewModel::updateName,
-                label = { Text("策划名称") },
-                placeholder = { Text("例如：2025 夏季婚纱套餐") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "参考样图",
-                style = MaterialTheme.typography.titleMedium
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (state.existingSamples.isNotEmpty()) {
-                Text(
-                    text = "已添加 (${state.existingSamples.size})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Gray500
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = state.name,
+                    onValueChange = viewModel::updateName,
+                    label = { Text("策划名称") },
+                    placeholder = { Text("例如：2025 夏季婚纱套餐") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(end = 8.dp)
-                ) {
-                    itemsIndexed(
-                        state.existingSamples,
-                        key = { _, sample -> sample.id }
-                    ) { _, sample ->
-                        ExistingImageItem(
-                            sample = sample,
-                            onRemove = { viewModel.removeExistingSample(sample) }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            if (state.selectedUris.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(24.dp))
+
                 Text(
-                    text = "待添加 (${state.selectedUris.size})",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Gray500
+                    text = "参考样图",
+                    style = MaterialTheme.typography.titleMedium
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(end = 8.dp)
-                ) {
-                    itemsIndexed(state.selectedUris) { index, uri ->
-                        NewImageItem(
-                            uri = uri,
-                            onRemove = { viewModel.removeUri(index) }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
 
-            AddPhotoButton(
-                onClick = {
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (state.existingSamples.isNotEmpty()) {
+                    Text(
+                        text = "已添加 (${state.existingSamples.size})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray500
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        state.existingSamples.forEach { sample ->
+                            ExistingImageItem(
+                                sample = sample,
+                                onRemove = { viewModel.removeExistingSample(sample) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-            )
 
-            Spacer(modifier = Modifier.weight(1f))
+                if (state.selectedUris.isNotEmpty()) {
+                    Text(
+                        text = "待添加 (${state.selectedUris.size})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Gray500
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        state.selectedUris.forEachIndexed { index, uri ->
+                            NewImageItem(
+                                uri = uri,
+                                onRemove = { viewModel.removeUri(index) }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                AddPhotoButton(
+                    onClick = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
+                )
+            }
 
             val hasImages = state.selectedUris.isNotEmpty() || state.existingSamples.isNotEmpty()
             Button(
                 onClick = { viewModel.savePlan(onNavigateToDetail) },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
                     .height(50.dp),
                 enabled = hasImages && !state.isSaving,
                 shape = RoundedCornerShape(12.dp),
