@@ -10,22 +10,29 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,19 +40,26 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -54,6 +68,7 @@ import com.photo.plan.ui.theme.CompletedOverlay
 import com.photo.plan.ui.theme.Gray100
 import com.photo.plan.ui.theme.Gray300
 import com.photo.plan.ui.theme.Gray500
+import com.photo.plan.ui.theme.Gray700
 import com.photo.plan.ui.theme.Green500
 import com.photo.plan.ui.theme.Green700
 import com.photo.plan.ui.theme.White
@@ -74,11 +89,14 @@ fun DetailScreen(
     val samples = uiState.samples
     val totalCount = uiState.totalCount
     val completedCount = uiState.completedCount
+    val isGridView = uiState.isGridView
     val progress = if (totalCount > 0) completedCount.toFloat() / totalCount else 0f
     val progressColor by animateColorAsState(
         targetValue = if (progress >= 1f) Green700 else Green500,
         label = "progressColor"
     )
+
+    var editingSample by remember { mutableStateOf<SampleEntity?>(null) }
 
     Scaffold(
         topBar = {
@@ -105,6 +123,13 @@ fun DetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.toggleLayout() }) {
+                        Icon(
+                            imageVector = if (isGridView) Icons.Filled.ViewAgenda else Icons.Filled.GridView,
+                            contentDescription = if (isGridView) "切换列表" else "切换网格",
+                            tint = Gray500
+                        )
+                    }
                     IconButton(onClick = { onNavigateToEdit(planId) }) {
                         Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = Gray500)
                     }
@@ -140,53 +165,109 @@ fun DetailScreen(
                 val incompleteSamples = samples.filter { !it.isCompleted }
                 val completedSamples = samples.filter { it.isCompleted }
 
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (incompleteSamples.isNotEmpty()) {
-                        item(span = { GridItemSpan(2) }) {
-                            SectionHeader("待拍摄", incompleteSamples.size)
+                if (isGridView) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (incompleteSamples.isNotEmpty()) {
+                            item(span = { GridItemSpan(2) }) {
+                                SectionHeader("待拍摄", incompleteSamples.size)
+                            }
+                            itemsIndexed(
+                                incompleteSamples,
+                                key = { _, s -> s.id }
+                            ) { index, sample ->
+                                SampleGridCard(
+                                    sample = sample,
+                                    globalIndex = index,
+                                    onClick = { viewModel.toggleCompleted(sample) },
+                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, false) },
+                                    onEditComment = { editingSample = sample }
+                                )
+                            }
                         }
-                        itemsIndexed(
-                            incompleteSamples,
-                            key = { _, s -> s.id }
-                        ) { index, sample ->
-                            SampleCard(
-                                sample = sample,
-                                globalIndex = index,
-                                onClick = { viewModel.toggleCompleted(sample) },
-                                onViewImage = { idx -> onNavigateToViewer(planId, idx, false) }
-                            )
+
+                        if (completedSamples.isNotEmpty()) {
+                            item(span = { GridItemSpan(2) }) {
+                                SectionHeader("已完成", completedSamples.size)
+                            }
+                            itemsIndexed(
+                                completedSamples,
+                                key = { _, s -> s.id }
+                            ) { index, sample ->
+                                SampleGridCard(
+                                    sample = sample,
+                                    globalIndex = index,
+                                    onClick = { viewModel.toggleCompleted(sample) },
+                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, true) },
+                                    onEditComment = { editingSample = sample }
+                                )
+                            }
+                        }
+
+                        item(span = { GridItemSpan(2) }) {
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
-
-                    if (completedSamples.isNotEmpty()) {
-                        item(span = { GridItemSpan(2) }) {
-                            SectionHeader("已完成", completedSamples.size)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (incompleteSamples.isNotEmpty()) {
+                            item { SectionHeader("待拍摄", incompleteSamples.size) }
+                            itemsIndexed(
+                                incompleteSamples,
+                                key = { _, s -> s.id }
+                            ) { index, sample ->
+                                SampleListCard(
+                                    sample = sample,
+                                    globalIndex = index,
+                                    onClick = { viewModel.toggleCompleted(sample) },
+                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, false) },
+                                    onEditComment = { editingSample = sample }
+                                )
+                            }
                         }
-                        itemsIndexed(
-                            completedSamples,
-                            key = { _, s -> s.id }
-                        ) { index, sample ->
-                            SampleCard(
-                                sample = sample,
-                                globalIndex = index,
-                                onClick = { viewModel.toggleCompleted(sample) },
-                                onViewImage = { idx -> onNavigateToViewer(planId, idx, true) }
-                            )
-                        }
-                    }
 
-                    item(span = { GridItemSpan(2) }) {
-                        Spacer(modifier = Modifier.height(16.dp))
+                        if (completedSamples.isNotEmpty()) {
+                            item { Spacer(modifier = Modifier.height(8.dp)) }
+                            item { SectionHeader("已完成", completedSamples.size) }
+                            itemsIndexed(
+                                completedSamples,
+                                key = { _, s -> s.id }
+                            ) { index, sample ->
+                                SampleListCard(
+                                    sample = sample,
+                                    globalIndex = index,
+                                    onClick = { viewModel.toggleCompleted(sample) },
+                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, true) },
+                                    onEditComment = { editingSample = sample }
+                                )
+                            }
+                        }
+
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
                     }
                 }
             }
         }
+    }
+
+    editingSample?.let { sample ->
+        CommentEditDialog(
+            sample = sample,
+            onDismiss = { editingSample = null },
+            onSave = { newComment ->
+                viewModel.updateComment(sample.id, newComment)
+                editingSample = null
+            }
+        )
     }
 }
 
@@ -223,17 +304,17 @@ private fun SectionHeader(title: String, count: Int) {
 }
 
 @Composable
-private fun SampleCard(
+private fun SampleGridCard(
     sample: SampleEntity,
     globalIndex: Int,
     onClick: () -> Unit,
-    onViewImage: (Int) -> Unit
+    onViewImage: (Int) -> Unit,
+    onEditComment: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable { onViewImage(globalIndex) },
+            .aspectRatio(1f),
         shape = RoundedCornerShape(10.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = if (sample.isCompleted) 0.dp else 2.dp),
         colors = CardDefaults.cardColors(
@@ -244,7 +325,9 @@ private fun SampleCard(
             AsyncImage(
                 model = sample.localPath,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { onViewImage(globalIndex) },
                 contentScale = ContentScale.Crop
             )
 
@@ -309,8 +392,232 @@ private fun SampleCard(
                     }
                 }
             }
+
+            if (sample.comment.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomStart)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(8.dp)
+                        .clickable { onEditComment() }
+                ) {
+                    Text(
+                        text = sample.comment,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = White,
+                        maxLines = 2
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun SampleListCard(
+    sample: SampleEntity,
+    globalIndex: Int,
+    onClick: () -> Unit,
+    onViewImage: (Int) -> Unit,
+    onEditComment: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (sample.isCompleted) 0.dp else 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (sample.isCompleted) Gray100 else MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onViewImage(globalIndex) }
+            ) {
+                AsyncImage(
+                    model = sample.localPath,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+
+                if (sample.isCompleted) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(CompletedOverlay)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    contentAlignment = Alignment.TopEnd
+                ) {
+                    val btnColor = if (sample.isCompleted) Gray500 else Green500
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(btnColor.copy(alpha = 0.9f))
+                            .clickable(onClick = onClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (sample.isCompleted) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "取消完成",
+                                tint = White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = "标记完成",
+                                tint = White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "第 ${globalIndex + 1} 张",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Gray500
+                        )
+                        if (sample.isCompleted) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Green500)
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "已完成",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = White,
+                                    fontSize = MaterialTheme.typography.bodySmall.fontSize
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Gray100)
+                            .clickable { onEditComment() }
+                            .padding(8.dp)
+                    ) {
+                        if (sample.comment.isEmpty()) {
+                            Text(
+                                text = "点击添加注释...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Gray500
+                            )
+                        } else {
+                            Text(
+                                text = sample.comment,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Gray700
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = { onEditComment() },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = "编辑注释",
+                            modifier = Modifier.size(16.dp),
+                            tint = Gray500
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (sample.comment.isEmpty()) "添加注释" else "编辑注释",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Gray500
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CommentEditDialog(
+    sample: SampleEntity,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var commentText by remember { mutableStateOf(sample.comment) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(text = "编辑注释", style = MaterialTheme.typography.titleMedium)
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    placeholder = { Text("输入注释内容...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    singleLine = false,
+                    maxLines = 5
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(commentText) }) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
 }
 
 @Composable

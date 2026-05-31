@@ -19,5 +19,6 @@ data class SampleEntity(
     val localPath: String,
     val isCompleted: Boolean = false,
     val sortOrder: Int,
+    val comment: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )

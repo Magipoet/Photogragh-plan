@@ -27,6 +27,9 @@ interface SampleDao {
     @Query("UPDATE samples SET isCompleted = :completed WHERE id = :sampleId")
     suspend fun updateCompleted(sampleId: Long, completed: Boolean)
 
+    @Query("UPDATE samples SET comment = :comment WHERE id = :sampleId")
+    suspend fun updateComment(sampleId: Long, comment: String)
+
     @Query("DELETE FROM samples WHERE id = :sampleId")
     suspend fun deleteSampleById(sampleId: Long)
 

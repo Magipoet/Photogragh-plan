@@ -19,7 +19,8 @@ data class DetailUiState(
     val plan: PlanEntity? = null,
     val samples: List<SampleEntity> = emptyList(),
     val totalCount: Int = 0,
-    val completedCount: Int = 0
+    val completedCount: Int = 0,
+    val isGridView: Boolean = true
 )
 
 class DetailViewModel(application: Application) : AndroidViewModel(application) {
@@ -33,18 +34,21 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
     private val _samples = MutableStateFlow<List<SampleEntity>>(emptyList())
     private val _totalCount = MutableStateFlow(0)
     private val _completedCount = MutableStateFlow(0)
+    private val _isGridView = MutableStateFlow(true)
 
     val uiState: StateFlow<DetailUiState> = combine(
         _plan,
         _samples,
         _totalCount,
-        _completedCount
-    ) { plan, samples, total, completed ->
+        _completedCount,
+        _isGridView
+    ) { plan, samples, total, completed, isGrid ->
         DetailUiState(
             plan = plan,
             samples = samples,
             totalCount = total,
-            completedCount = completed
+            completedCount = completed,
+            isGridView = isGrid
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DetailUiState())
 
@@ -65,6 +69,16 @@ class DetailViewModel(application: Application) : AndroidViewModel(application) 
     fun toggleCompleted(sample: SampleEntity) {
         viewModelScope.launch {
             sampleRepository.toggleCompleted(sample.id, sample.isCompleted)
+        }
+    }
+
+    fun toggleLayout() {
+        _isGridView.value = !_isGridView.value
+    }
+
+    fun updateComment(sampleId: Long, comment: String) {
+        viewModelScope.launch {
+            sampleRepository.updateComment(sampleId, comment)
         }
     }
 }

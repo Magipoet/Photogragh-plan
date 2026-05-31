@@ -50,6 +50,10 @@ class SampleRepository(
         sampleDao.updateCompleted(sampleId, !currentCompleted)
     }
 
+    suspend fun updateComment(sampleId: Long, comment: String) {
+        sampleDao.updateComment(sampleId, comment)
+    }
+
     suspend fun deleteSample(sample: SampleEntity) {
         withContext(Dispatchers.IO) {
             val file = File(sample.localPath)
