@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -52,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
@@ -149,17 +151,22 @@ fun CreatePlanScreen(
                         color = Gray500
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        maxItemsInEachRow = 3
-                    ) {
-                        state.existingSamples.forEach { sample ->
-                            ExistingImageItem(
-                                sample = sample,
-                                onRemove = { viewModel.removeExistingSample(sample) }
-                            )
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        val itemSpacing = 8.dp
+                        val itemWidth = (maxWidth - itemSpacing * 2) / 3
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+                            verticalArrangement = Arrangement.spacedBy(itemSpacing),
+                            maxItemsInEachRow = 3
+                        ) {
+                            state.existingSamples.forEach { sample ->
+                                ExistingImageItem(
+                                    sample = sample,
+                                    itemWidth = itemWidth,
+                                    onRemove = { viewModel.removeExistingSample(sample) }
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -172,17 +179,22 @@ fun CreatePlanScreen(
                         color = Gray500
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        maxItemsInEachRow = 3
-                    ) {
-                        state.selectedUris.forEachIndexed { index, uri ->
-                            NewImageItem(
-                                uri = uri,
-                                onRemove = { viewModel.removeUri(index) }
-                            )
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        val itemSpacing = 8.dp
+                        val itemWidth = (maxWidth - itemSpacing * 2) / 3
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+                            verticalArrangement = Arrangement.spacedBy(itemSpacing),
+                            maxItemsInEachRow = 3
+                        ) {
+                            state.selectedUris.forEachIndexed { index, uri ->
+                                NewImageItem(
+                                    uri = uri,
+                                    itemWidth = itemWidth,
+                                    onRemove = { viewModel.removeUri(index) }
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -242,11 +254,12 @@ fun CreatePlanScreen(
 @Composable
 private fun ExistingImageItem(
     sample: SampleEntity,
+    itemWidth: Dp,
     onRemove: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(itemWidth)
             .aspectRatio(1f)
             .clip(RoundedCornerShape(8.dp))
     ) {
@@ -276,11 +289,12 @@ private fun ExistingImageItem(
 @Composable
 private fun NewImageItem(
     uri: Uri,
+    itemWidth: Dp,
     onRemove: () -> Unit
 ) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(itemWidth)
             .aspectRatio(1f)
             .clip(RoundedCornerShape(8.dp))
     ) {

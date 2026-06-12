@@ -41,6 +41,7 @@ import com.photo.plan.data.local.entity.SampleEntity
 import com.photo.plan.ui.detail.DetailViewModel
 import com.photo.plan.ui.theme.White
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlin.math.sqrt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -227,26 +228,36 @@ private fun ZoomableImage(
                                     if (isVerticalDrag && currentDragY > dragThreshold) {
                                         scope.launch {
                                             val targetY = size.height.toFloat()
-                                            dragYAnimatable.animateTo(
-                                                targetValue = targetY,
-                                                animationSpec = tween(durationMillis = 250)
-                                            )
-                                            bgAlphaAnimatable.animateTo(
-                                                targetValue = 0f,
-                                                animationSpec = tween(durationMillis = 250)
-                                            )
+                                            val animJob1 = launch {
+                                                dragYAnimatable.animateTo(
+                                                    targetValue = targetY,
+                                                    animationSpec = tween(durationMillis = 220)
+                                                )
+                                            }
+                                            val animJob2 = launch {
+                                                bgAlphaAnimatable.animateTo(
+                                                    targetValue = 0f,
+                                                    animationSpec = tween(durationMillis = 220)
+                                                )
+                                            }
+                                            joinAll(animJob1, animJob2)
                                             onDismiss()
                                         }
                                     } else {
                                         scope.launch {
-                                            dragYAnimatable.animateTo(
-                                                targetValue = 0f,
-                                                animationSpec = tween(durationMillis = 200)
-                                            )
-                                            bgAlphaAnimatable.animateTo(
-                                                targetValue = 1f,
-                                                animationSpec = tween(durationMillis = 200)
-                                            )
+                                            val animJob1 = launch {
+                                                dragYAnimatable.animateTo(
+                                                    targetValue = 0f,
+                                                    animationSpec = tween(durationMillis = 200)
+                                                )
+                                            }
+                                            val animJob2 = launch {
+                                                bgAlphaAnimatable.animateTo(
+                                                    targetValue = 1f,
+                                                    animationSpec = tween(durationMillis = 200)
+                                                )
+                                            }
+                                            joinAll(animJob1, animJob2)
                                         }
                                     }
                                     isVerticalDrag = false
