@@ -167,14 +167,14 @@ fun DetailScreen(
 
                 if (isGridView) {
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(3),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (incompleteSamples.isNotEmpty()) {
-                            item(span = { GridItemSpan(2) }) {
+                            item(span = { GridItemSpan(3) }) {
                                 SectionHeader("待拍摄", incompleteSamples.size)
                             }
                             itemsIndexed(
@@ -192,7 +192,7 @@ fun DetailScreen(
                         }
 
                         if (completedSamples.isNotEmpty()) {
-                            item(span = { GridItemSpan(2) }) {
+                            item(span = { GridItemSpan(3) }) {
                                 SectionHeader("已完成", completedSamples.size)
                             }
                             itemsIndexed(
@@ -209,7 +209,7 @@ fun DetailScreen(
                             }
                         }
 
-                        item(span = { GridItemSpan(2) }) {
+                        item(span = { GridItemSpan(3) }) {
                             Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
