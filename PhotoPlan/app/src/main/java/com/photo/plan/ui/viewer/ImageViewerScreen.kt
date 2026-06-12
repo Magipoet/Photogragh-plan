@@ -1,5 +1,7 @@
 package com.photo.plan.ui.viewer
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +24,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +40,7 @@ import coil3.compose.AsyncImage
 import com.photo.plan.data.local.entity.SampleEntity
 import com.photo.plan.ui.detail.DetailViewModel
 import com.photo.plan.ui.theme.White
+import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -111,14 +115,15 @@ private fun ZoomableImage(
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
-    var dragY by remember { mutableFloatStateOf(0f) }
-    var bgAlpha by remember { mutableFloatStateOf(1f) }
+    val dragYAnimatable = remember { Animatable(0f) }
+    val bgAlphaAnimatable = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
     val dragThreshold = 200f
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = bgAlpha))
+            .background(Color.Black.copy(alpha = bgAlphaAnimatable.value))
             .pointerInput(Unit) {
                 var lastTouchCount = 0
                 var lastDistance = 0f
@@ -140,6 +145,12 @@ private fun ZoomableImage(
                                 if (touchCount == 1) {
                                     dragStartX = pressedChanges[0].position.x
                                     dragStartY = pressedChanges[0].position.y
+                                    scope.launch {
+                                        dragYAnimatable.stop()
+                                        bgAlphaAnimatable.stop()
+                                        dragYAnimatable.snapTo(dragYAnimatable.value)
+                                        bgAlphaAnimatable.snapTo(bgAlphaAnimatable.value)
+                                    }
                                 }
                                 lastTouchCount = touchCount
                             }
@@ -198,8 +209,12 @@ private fun ZoomableImage(
                                     }
 
                                     if (isVerticalDrag && totalDy > 0f) {
-                                        dragY = totalDy
-                                        bgAlpha = (1f - dragY / (size.height * 1.5f)).coerceIn(0.3f, 1f)
+                                        scope.launch {
+                                            dragYAnimatable.snapTo(totalDy)
+                                            bgAlphaAnimatable.snapTo(
+                                                (1f - totalDy / (size.height * 1.5f)).coerceIn(0.3f, 1f)
+                                            )
+                                        }
                                         change.consume()
                                     }
                                 }
@@ -208,11 +223,31 @@ private fun ZoomableImage(
                             }
                             PointerEventType.Release -> {
                                 if (touchCount == 0) {
-                                    if (isVerticalDrag && dragY > dragThreshold) {
-                                        onDismiss()
+                                    val currentDragY = dragYAnimatable.value
+                                    if (isVerticalDrag && currentDragY > dragThreshold) {
+                                        scope.launch {
+                                            val targetY = size.height.toFloat()
+                                            dragYAnimatable.animateTo(
+                                                targetValue = targetY,
+                                                animationSpec = tween(durationMillis = 250)
+                                            )
+                                            bgAlphaAnimatable.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = tween(durationMillis = 250)
+                                            )
+                                            onDismiss()
+                                        }
                                     } else {
-                                        dragY = 0f
-                                        bgAlpha = 1f
+                                        scope.launch {
+                                            dragYAnimatable.animateTo(
+                                                targetValue = 0f,
+                                                animationSpec = tween(durationMillis = 200)
+                                            )
+                                            bgAlphaAnimatable.animateTo(
+                                                targetValue = 1f,
+                                                animationSpec = tween(durationMillis = 200)
+                                            )
+                                        }
                                     }
                                     isVerticalDrag = false
                                     isHorizontalDrag = false
@@ -241,7 +276,7 @@ private fun ZoomableImage(
                     scaleX = scale
                     scaleY = scale
                     translationX = offsetX
-                    translationY = offsetY + dragY
+                    translationY = offsetY + dragYAnimatable.value
                 },
             contentScale = ContentScale.Fit
         )

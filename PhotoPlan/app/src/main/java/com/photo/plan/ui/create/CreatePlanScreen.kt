@@ -150,8 +150,10 @@ fun CreatePlanScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        maxItemsInEachRow = 3
                     ) {
                         state.existingSamples.forEach { sample ->
                             ExistingImageItem(
@@ -171,8 +173,10 @@ fun CreatePlanScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        maxItemsInEachRow = 3
                     ) {
                         state.selectedUris.forEachIndexed { index, uri ->
                             NewImageItem(
@@ -242,7 +246,8 @@ private fun ExistingImageItem(
 ) {
     Box(
         modifier = Modifier
-            .size(100.dp)
+            .fillMaxWidth()
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(8.dp))
     ) {
         AsyncImage(
@@ -275,7 +280,8 @@ private fun NewImageItem(
 ) {
     Box(
         modifier = Modifier
-            .size(100.dp)
+            .fillMaxWidth()
+            .aspectRatio(1f)
             .clip(RoundedCornerShape(8.dp))
     ) {
         AsyncImage(
