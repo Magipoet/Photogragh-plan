@@ -239,16 +239,36 @@ fun CreatePlanScreen(
         }
 
         if (state.showNamePrompt) {
+            val defaultName = viewModel.getDefaultName()
             AlertDialog(
                 onDismissRequest = viewModel::dismissNamePrompt,
                 title = { Text("请填写策划名称") },
-                text = { Text("为了更好地管理您的摄影策划，请输入一个策划名称。") },
+                text = {
+                    Column {
+                        Text("为了更好地管理您的摄影策划，请输入一个策划名称。")
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "推荐名称：$defaultName",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
                 confirmButton = {
-                    Button(
-                        onClick = viewModel::dismissNamePrompt,
-                        colors = ButtonDefaults.buttonColors(containerColor = Green500)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("好的")
+                        TextButton(onClick = viewModel::dismissNamePrompt) {
+                            Text("手动编辑")
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        Button(
+                            onClick = { viewModel.saveWithDefaultName(onNavigateToDetail) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Green500)
+                        ) {
+                            Text("使用推荐名称")
+                        }
                     }
                 }
             )

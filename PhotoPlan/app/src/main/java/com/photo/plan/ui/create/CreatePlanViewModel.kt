@@ -17,6 +17,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 data class CreatePlanState(
     val name: String = "",
@@ -172,5 +175,17 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
 
     fun dismissNamePrompt() {
         _state.value = _state.value.copy(showNamePrompt = false)
+    }
+
+    fun getDefaultName(): String {
+        val calendar = Calendar.getInstance()
+        val dateFormat = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
+        return dateFormat.format(calendar.time)
+    }
+
+    fun saveWithDefaultName(onSaved: (Long) -> Unit) {
+        val defaultName = getDefaultName()
+        _state.value = _state.value.copy(name = defaultName, showNamePrompt = false)
+        savePlan(onSaved)
     }
 }
