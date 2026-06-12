@@ -154,18 +154,20 @@ fun CreatePlanScreen(
                     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                         val itemSpacing = 8.dp
                         val itemWidth = (maxWidth - itemSpacing * 2) / 3
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-                            verticalArrangement = Arrangement.spacedBy(itemSpacing),
-                            maxItemsInEachRow = 3
-                        ) {
-                            state.existingSamples.forEach { sample ->
-                                ExistingImageItem(
-                                    sample = sample,
-                                    itemWidth = itemWidth,
-                                    onRemove = { viewModel.removeExistingSample(sample) }
-                                )
+                        Column(verticalArrangement = Arrangement.spacedBy(itemSpacing)) {
+                            state.existingSamples.chunked(3).forEach { rowSamples ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(itemSpacing)) {
+                                    rowSamples.forEach { sample ->
+                                        ExistingImageItem(
+                                            sample = sample,
+                                            itemWidth = itemWidth,
+                                            onRemove = { viewModel.removeExistingSample(sample) }
+                                        )
+                                    }
+                                    repeat(3 - rowSamples.size) {
+                                        Spacer(modifier = Modifier.width(itemWidth))
+                                    }
+                                }
                             }
                         }
                     }
@@ -182,18 +184,21 @@ fun CreatePlanScreen(
                     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                         val itemSpacing = 8.dp
                         val itemWidth = (maxWidth - itemSpacing * 2) / 3
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-                            verticalArrangement = Arrangement.spacedBy(itemSpacing),
-                            maxItemsInEachRow = 3
-                        ) {
-                            state.selectedUris.forEachIndexed { index, uri ->
-                                NewImageItem(
-                                    uri = uri,
-                                    itemWidth = itemWidth,
-                                    onRemove = { viewModel.removeUri(index) }
-                                )
+                        Column(verticalArrangement = Arrangement.spacedBy(itemSpacing)) {
+                            state.selectedUris.chunked(3).forEachIndexed { rowIndex, rowUris ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(itemSpacing)) {
+                                    rowUris.forEachIndexed { colIndex, uri ->
+                                        val globalIndex = rowIndex * 3 + colIndex
+                                        NewImageItem(
+                                            uri = uri,
+                                            itemWidth = itemWidth,
+                                            onRemove = { viewModel.removeUri(globalIndex) }
+                                        )
+                                    }
+                                    repeat(3 - rowUris.size) {
+                                        Spacer(modifier = Modifier.width(itemWidth))
+                                    }
+                                }
                             }
                         }
                     }
