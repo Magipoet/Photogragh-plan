@@ -269,18 +269,21 @@ private fun ExistingImageItem(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        IconButton(
-            onClick = onRemove,
+        Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .size(28.dp)
-                .padding(2.dp)
+                .padding(4.dp)
+                .size(20.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Filled.Close,
                 contentDescription = "删除",
                 tint = Color.White,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }
@@ -304,18 +307,21 @@ private fun NewImageItem(
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
-        IconButton(
-            onClick = onRemove,
+        Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .size(28.dp)
-                .padding(2.dp)
+                .padding(4.dp)
+                .size(20.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.Black.copy(alpha = 0.5f))
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 Icons.Filled.Close,
                 contentDescription = "删除",
                 tint = Color.White,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(14.dp)
             )
         }
     }

@@ -1,6 +1,8 @@
 package com.photo.plan.ui.detail
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -23,6 +26,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -50,13 +55,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -72,6 +83,14 @@ import com.photo.plan.ui.theme.Gray700
 import com.photo.plan.ui.theme.Green500
 import com.photo.plan.ui.theme.Green700
 import com.photo.plan.ui.theme.White
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
+import kotlin.math.sqrt
+
+private sealed class ViewerState {
+    object Closed : ViewerState()
+    data class Open(val initialIndex: Int, val filterCompleted: Boolean) : ViewerState()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,165 +116,178 @@ fun DetailScreen(
     )
 
     var editingSample by remember { mutableStateOf<SampleEntity?>(null) }
+    var viewerState by remember { mutableStateOf<ViewerState>(ViewerState.Closed) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = plan?.name ?: "",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1
-                        )
-                        if (totalCount > 0) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
                             Text(
-                                text = "$completedCount/$totalCount 已完成",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Gray500
+                                text = plan?.name ?: "",
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1
+                            )
+                            if (totalCount > 0) {
+                                Text(
+                                    text = "$completedCount/$totalCount 已完成",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Gray500
+                                )
+                            }
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.toggleLayout() }) {
+                            Icon(
+                                imageVector = if (isGridView) Icons.Filled.ViewAgenda else Icons.Filled.GridView,
+                                contentDescription = if (isGridView) "切换列表" else "切换网格",
+                                tint = Gray500
                             )
                         }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.toggleLayout() }) {
-                        Icon(
-                            imageVector = if (isGridView) Icons.Filled.ViewAgenda else Icons.Filled.GridView,
-                            contentDescription = if (isGridView) "切换列表" else "切换网格",
-                            tint = Gray500
-                        )
-                    }
-                    IconButton(onClick = { onNavigateToEdit(planId) }) {
-                        Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = Gray500)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                        IconButton(onClick = { onNavigateToEdit(planId) }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "编辑", tint = Gray500)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
                 )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (totalCount > 0) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(2.dp)),
-                    color = progressColor,
-                    trackColor = Gray300,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
             }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                if (totalCount > 0) {
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .padding(horizontal = 16.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = progressColor,
+                        trackColor = Gray300,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
-            if (samples.isEmpty()) {
-                EmptyDetailState()
-            } else {
-                val incompleteSamples = samples.filter { !it.isCompleted }
-                val completedSamples = samples.filter { it.isCompleted }
-
-                if (isGridView) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (incompleteSamples.isNotEmpty()) {
-                            item(span = { GridItemSpan(3) }) {
-                                SectionHeader("待拍摄", incompleteSamples.size)
-                            }
-                            itemsIndexed(
-                                incompleteSamples,
-                                key = { _, s -> s.id }
-                            ) { index, sample ->
-                                SampleGridCard(
-                                    sample = sample,
-                                    globalIndex = index,
-                                    onClick = { viewModel.toggleCompleted(sample) },
-                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, false) },
-                                    onEditComment = { editingSample = sample }
-                                )
-                            }
-                        }
-
-                        if (completedSamples.isNotEmpty()) {
-                            item(span = { GridItemSpan(3) }) {
-                                SectionHeader("已完成", completedSamples.size)
-                            }
-                            itemsIndexed(
-                                completedSamples,
-                                key = { _, s -> s.id }
-                            ) { index, sample ->
-                                SampleGridCard(
-                                    sample = sample,
-                                    globalIndex = index,
-                                    onClick = { viewModel.toggleCompleted(sample) },
-                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, true) },
-                                    onEditComment = { editingSample = sample }
-                                )
-                            }
-                        }
-
-                        item(span = { GridItemSpan(3) }) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                    }
+                if (samples.isEmpty()) {
+                    EmptyDetailState()
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (incompleteSamples.isNotEmpty()) {
-                            item { SectionHeader("待拍摄", incompleteSamples.size) }
-                            itemsIndexed(
-                                incompleteSamples,
-                                key = { _, s -> s.id }
-                            ) { index, sample ->
-                                SampleListCard(
-                                    sample = sample,
-                                    globalIndex = index,
-                                    onClick = { viewModel.toggleCompleted(sample) },
-                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, false) },
-                                    onEditComment = { editingSample = sample }
-                                )
+                    val incompleteSamples = samples.filter { !it.isCompleted }
+                    val completedSamples = samples.filter { it.isCompleted }
+
+                    if (isGridView) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            if (incompleteSamples.isNotEmpty()) {
+                                item(span = { GridItemSpan(2) }) {
+                                    SectionHeader("待拍摄", incompleteSamples.size)
+                                }
+                                itemsIndexed(
+                                    incompleteSamples,
+                                    key = { _, s -> s.id }
+                                ) { index, sample ->
+                                    SampleGridCard(
+                                        sample = sample,
+                                        globalIndex = index,
+                                        onClick = { viewModel.toggleCompleted(sample) },
+                                        onViewImage = { viewerState = ViewerState.Open(it, false) },
+                                        onEditComment = { editingSample = sample }
+                                    )
+                                }
+                            }
+
+                            if (completedSamples.isNotEmpty()) {
+                                item(span = { GridItemSpan(2) }) {
+                                    SectionHeader("已完成", completedSamples.size)
+                                }
+                                itemsIndexed(
+                                    completedSamples,
+                                    key = { _, s -> s.id }
+                                ) { index, sample ->
+                                    SampleGridCard(
+                                        sample = sample,
+                                        globalIndex = index,
+                                        onClick = { viewModel.toggleCompleted(sample) },
+                                        onViewImage = { viewerState = ViewerState.Open(it, true) },
+                                        onEditComment = { editingSample = sample }
+                                    )
+                                }
+                            }
+
+                            item(span = { GridItemSpan(2) }) {
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
                         }
-
-                        if (completedSamples.isNotEmpty()) {
-                            item { Spacer(modifier = Modifier.height(8.dp)) }
-                            item { SectionHeader("已完成", completedSamples.size) }
-                            itemsIndexed(
-                                completedSamples,
-                                key = { _, s -> s.id }
-                            ) { index, sample ->
-                                SampleListCard(
-                                    sample = sample,
-                                    globalIndex = index,
-                                    onClick = { viewModel.toggleCompleted(sample) },
-                                    onViewImage = { idx -> onNavigateToViewer(planId, idx, true) },
-                                    onEditComment = { editingSample = sample }
-                                )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (incompleteSamples.isNotEmpty()) {
+                                item { SectionHeader("待拍摄", incompleteSamples.size) }
+                                itemsIndexed(
+                                    incompleteSamples,
+                                    key = { _, s -> s.id }
+                                ) { index, sample ->
+                                    SampleListCard(
+                                        sample = sample,
+                                        globalIndex = index,
+                                        onClick = { viewModel.toggleCompleted(sample) },
+                                        onViewImage = { viewerState = ViewerState.Open(it, false) },
+                                        onEditComment = { editingSample = sample }
+                                    )
+                                }
                             }
-                        }
 
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
+                            if (completedSamples.isNotEmpty()) {
+                                item { Spacer(modifier = Modifier.height(8.dp)) }
+                                item { SectionHeader("已完成", completedSamples.size) }
+                                itemsIndexed(
+                                    completedSamples,
+                                    key = { _, s -> s.id }
+                                ) { index, sample ->
+                                    SampleListCard(
+                                        sample = sample,
+                                        globalIndex = index,
+                                        onClick = { viewModel.toggleCompleted(sample) },
+                                        onViewImage = { viewerState = ViewerState.Open(it, true) },
+                                        onEditComment = { editingSample = sample }
+                                    )
+                                }
+                            }
+
+                            item { Spacer(modifier = Modifier.height(16.dp)) }
+                        }
                     }
                 }
             }
+        }
+
+        val openState = viewerState as? ViewerState.Open
+        if (openState != null) {
+            FullscreenImageViewer(
+                samples = samples,
+                initialIndex = openState.initialIndex,
+                filterCompleted = openState.filterCompleted,
+                onDismiss = { viewerState = ViewerState.Closed }
+            )
         }
     }
 
@@ -267,6 +299,249 @@ fun DetailScreen(
                 viewModel.updateComment(sample.id, newComment)
                 editingSample = null
             }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun FullscreenImageViewer(
+    samples: List<SampleEntity>,
+    initialIndex: Int,
+    filterCompleted: Boolean,
+    onDismiss: () -> Unit
+) {
+    val filteredSamples = samples.filter { it.isCompleted == filterCompleted }
+    val pagerState = rememberPagerState(
+        initialPage = 0,
+        pageCount = { filteredSamples.size }
+    )
+
+    LaunchedEffect(filteredSamples.size) {
+        if (filteredSamples.isNotEmpty()) {
+            val targetPage = initialIndex.coerceIn(0, filteredSamples.size - 1)
+            pagerState.scrollToPage(targetPage)
+        }
+    }
+
+    var bgAlpha by remember { mutableFloatStateOf(1f) }
+    var topBarAlpha by remember { mutableFloatStateOf(1f) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = bgAlpha))
+    ) {
+        if (filteredSamples.isNotEmpty()) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = true
+            ) { page ->
+                val sample = filteredSamples.getOrNull(page) ?: return@HorizontalPager
+                ZoomableImageOverlay(
+                    sample = sample,
+                    onDismiss = onDismiss,
+                    onBgAlphaChange = { newAlpha ->
+                        bgAlpha = newAlpha
+                        topBarAlpha = newAlpha
+                    }
+                )
+            }
+        }
+
+        TopAppBar(
+            title = {
+                if (filteredSamples.isNotEmpty()) {
+                    Text(
+                        "${pagerState.currentPage + 1} / ${filteredSamples.size}",
+                        color = White
+                    )
+                }
+            },
+            navigationIcon = {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "返回", tint = White)
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Black.copy(alpha = 0.5f * topBarAlpha),
+                titleContentColor = White
+            ),
+            modifier = Modifier.statusBarsPadding()
+        )
+    }
+}
+
+@Composable
+private fun ZoomableImageOverlay(
+    sample: SampleEntity,
+    onDismiss: () -> Unit,
+    onBgAlphaChange: (Float) -> Unit
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    val dragYAnimatable = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val dragThreshold = 200f
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                var lastTouchCount = 0
+                var lastDistance = 0f
+                var lastCenter = Offset.Zero
+                var isVerticalDrag = false
+                var isHorizontalDrag = false
+                var dragStartX = 0f
+                var dragStartY = 0f
+
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val changes = event.changes
+                        val pressedChanges = changes.filter { c -> c.pressed }
+                        val touchCount = pressedChanges.size
+
+                        when (event.type) {
+                            PointerEventType.Press -> {
+                                if (touchCount == 1) {
+                                    dragStartX = pressedChanges[0].position.x
+                                    dragStartY = pressedChanges[0].position.y
+                                    scope.launch {
+                                        dragYAnimatable.stop()
+                                        dragYAnimatable.snapTo(dragYAnimatable.value)
+                                    }
+                                }
+                                lastTouchCount = touchCount
+                            }
+                            PointerEventType.Move -> {
+                                if (touchCount >= 2) {
+                                    isVerticalDrag = false
+                                    isHorizontalDrag = false
+                                    val p1 = pressedChanges[0].position
+                                    val p2 = pressedChanges[1].position
+                                    val currentDistance = distanceBetween(p1, p2)
+                                    val currentCenter = centerOf(p1, p2)
+
+                                    if (lastTouchCount >= 2 && lastDistance > 0f) {
+                                        val zoom = currentDistance / lastDistance
+                                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                        val pan = currentCenter - lastCenter
+
+                                        scale = newScale
+                                        if (newScale > 1.01f) {
+                                            val maxX = (newScale - 1) * size.width / 2
+                                            val maxY = (newScale - 1) * size.height / 2
+                                            offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                            offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                        } else {
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        }
+                                    }
+
+                                    lastDistance = currentDistance
+                                    lastCenter = currentCenter
+                                    changes.forEach { it.consume() }
+                                } else if (touchCount == 1 && scale > 1.01f) {
+                                    val change = pressedChanges[0]
+                                    if (lastTouchCount == 1) {
+                                        val pan = change.position - change.previousPosition
+                                        val maxX = (scale - 1) * size.width / 2
+                                        val maxY = (scale - 1) * size.height / 2
+                                        offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                        offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                    }
+                                    change.consume()
+                                } else if (touchCount == 1 && scale <= 1.01f) {
+                                    val change = pressedChanges[0]
+                                    val currentX = change.position.x
+                                    val currentY = change.position.y
+                                    val totalDx = currentX - dragStartX
+                                    val totalDy = currentY - dragStartY
+
+                                    if (!isVerticalDrag && !isHorizontalDrag) {
+                                        if (kotlin.math.abs(totalDy) > 20f && kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)) {
+                                            isVerticalDrag = true
+                                        } else if (kotlin.math.abs(totalDx) > 20f) {
+                                            isHorizontalDrag = true
+                                        }
+                                    }
+
+                                    if (isVerticalDrag && totalDy > 0f) {
+                                        scope.launch {
+                                            dragYAnimatable.snapTo(totalDy)
+                                        }
+                                        onBgAlphaChange(
+                                            (1f - totalDy / (size.height * 1.5f)).coerceIn(0f, 1f)
+                                        )
+                                        change.consume()
+                                    }
+                                }
+
+                                lastTouchCount = touchCount
+                            }
+                            PointerEventType.Release -> {
+                                if (touchCount == 0) {
+                                    val currentDragY = dragYAnimatable.value
+                                    if (isVerticalDrag && currentDragY > dragThreshold) {
+                                        scope.launch {
+                                            val targetY = size.height.toFloat()
+                                            val animJob1 = launch {
+                                                dragYAnimatable.animateTo(
+                                                    targetValue = targetY,
+                                                    animationSpec = tween(durationMillis = 220)
+                                                )
+                                            }
+                                            onBgAlphaChange(0f)
+                                            joinAll(animJob1)
+                                            onDismiss()
+                                        }
+                                    } else {
+                                        scope.launch {
+                                            val animJob1 = launch {
+                                                dragYAnimatable.animateTo(
+                                                    targetValue = 0f,
+                                                    animationSpec = tween(durationMillis = 200)
+                                                )
+                                            }
+                                            joinAll(animJob1)
+                                            onBgAlphaChange(1f)
+                                        }
+                                    }
+                                    isVerticalDrag = false
+                                    isHorizontalDrag = false
+                                    lastTouchCount = 0
+                                    lastDistance = 0f
+                                    if (scale <= 1.01f) {
+                                        scale = 1f
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    }
+                                }
+                            }
+                            else -> { lastTouchCount = touchCount }
+                        }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        AsyncImage(
+            model = sample.localPath,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                    translationY = offsetY + dragYAnimatable.value
+                },
+            contentScale = ContentScale.Fit
         )
     }
 }
@@ -619,4 +894,14 @@ private fun EmptyDetailState() {
             )
         }
     }
+}
+
+private fun distanceBetween(a: Offset, b: Offset): Float {
+    val dx = a.x - b.x
+    val dy = a.y - b.y
+    return sqrt(dx * dx + dy * dy)
+}
+
+private fun centerOf(a: Offset, b: Offset): Offset {
+    return Offset((a.x + b.x) / 2f, (a.y + b.y) / 2f)
 }

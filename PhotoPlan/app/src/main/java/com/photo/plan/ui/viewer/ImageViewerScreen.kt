@@ -70,11 +70,7 @@ fun ImageViewerScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         if (samples.isNotEmpty()) {
             HorizontalPager(
                 state = pagerState,
