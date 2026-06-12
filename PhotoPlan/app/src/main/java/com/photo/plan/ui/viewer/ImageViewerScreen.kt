@@ -69,10 +69,14 @@ fun ImageViewerScreen(
         if (samples.isNotEmpty()) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = true
             ) { page ->
                 val sample = samples.getOrNull(page) ?: return@HorizontalPager
-                ZoomableImage(sample = sample)
+                ZoomableImage(
+                    sample = sample,
+                    onDismiss = onNavigateBack
+                )
             }
         }
 
@@ -100,19 +104,29 @@ fun ImageViewerScreen(
 }
 
 @Composable
-private fun ZoomableImage(sample: SampleEntity) {
+private fun ZoomableImage(
+    sample: SampleEntity,
+    onDismiss: () -> Unit
+) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var bgAlpha by remember { mutableFloatStateOf(1f) }
+    val dragThreshold = 200f
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(Color.Black.copy(alpha = bgAlpha))
             .pointerInput(Unit) {
                 var lastTouchCount = 0
                 var lastDistance = 0f
                 var lastCenter = Offset.Zero
+                var isVerticalDrag = false
+                var isHorizontalDrag = false
+                var dragStartX = 0f
+                var dragStartY = 0f
 
                 awaitPointerEventScope {
                     while (true) {
@@ -122,9 +136,17 @@ private fun ZoomableImage(sample: SampleEntity) {
                         val touchCount = pressedChanges.size
 
                         when (event.type) {
-                            PointerEventType.Press,
+                            PointerEventType.Press -> {
+                                if (touchCount == 1) {
+                                    dragStartX = pressedChanges[0].position.x
+                                    dragStartY = pressedChanges[0].position.y
+                                }
+                                lastTouchCount = touchCount
+                            }
                             PointerEventType.Move -> {
                                 if (touchCount >= 2) {
+                                    isVerticalDrag = false
+                                    isHorizontalDrag = false
                                     val p1 = pressedChanges[0].position
                                     val p2 = pressedChanges[1].position
                                     val currentDistance = distanceBetween(p1, p2)
@@ -160,12 +182,40 @@ private fun ZoomableImage(sample: SampleEntity) {
                                         offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
                                     }
                                     change.consume()
+                                } else if (touchCount == 1 && scale <= 1.01f) {
+                                    val change = pressedChanges[0]
+                                    val currentX = change.position.x
+                                    val currentY = change.position.y
+                                    val totalDx = currentX - dragStartX
+                                    val totalDy = currentY - dragStartY
+
+                                    if (!isVerticalDrag && !isHorizontalDrag) {
+                                        if (kotlin.math.abs(totalDy) > 20f && kotlin.math.abs(totalDy) > kotlin.math.abs(totalDx)) {
+                                            isVerticalDrag = true
+                                        } else if (kotlin.math.abs(totalDx) > 20f) {
+                                            isHorizontalDrag = true
+                                        }
+                                    }
+
+                                    if (isVerticalDrag && totalDy > 0f) {
+                                        dragY = totalDy
+                                        bgAlpha = (1f - dragY / (size.height * 1.5f)).coerceIn(0.3f, 1f)
+                                        change.consume()
+                                    }
                                 }
 
                                 lastTouchCount = touchCount
                             }
                             PointerEventType.Release -> {
                                 if (touchCount == 0) {
+                                    if (isVerticalDrag && dragY > dragThreshold) {
+                                        onDismiss()
+                                    } else {
+                                        dragY = 0f
+                                        bgAlpha = 1f
+                                    }
+                                    isVerticalDrag = false
+                                    isHorizontalDrag = false
                                     lastTouchCount = 0
                                     lastDistance = 0f
                                     if (scale <= 1.01f) {
@@ -191,7 +241,7 @@ private fun ZoomableImage(sample: SampleEntity) {
                     scaleX = scale
                     scaleY = scale
                     translationX = offsetX
-                    translationY = offsetY
+                    translationY = offsetY + dragY
                 },
             contentScale = ContentScale.Fit
         )

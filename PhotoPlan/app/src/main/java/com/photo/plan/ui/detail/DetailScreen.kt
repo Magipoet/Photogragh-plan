@@ -337,34 +337,13 @@ private fun SampleGridCard(
                         .fillMaxSize()
                         .background(CompletedOverlay)
                 )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(8.dp),
-                    contentAlignment = Alignment.BottomEnd
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(Green500),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Filled.Check,
-                            contentDescription = "已完成",
-                            tint = White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
             }
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
-                contentAlignment = if (sample.isCompleted) Alignment.BottomStart else Alignment.TopEnd
+                contentAlignment = if (sample.isCompleted) Alignment.BottomEnd else Alignment.TopEnd
             ) {
                 val btnColor = if (sample.isCompleted) Gray500 else Green500
                 Box(
