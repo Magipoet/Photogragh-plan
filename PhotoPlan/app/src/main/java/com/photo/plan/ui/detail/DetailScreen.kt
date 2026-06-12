@@ -662,7 +662,7 @@ private fun SampleGridCard(
                         color = White,
                         maxLines = 2
                     )
-                )
+                }
             }
         }
     }
