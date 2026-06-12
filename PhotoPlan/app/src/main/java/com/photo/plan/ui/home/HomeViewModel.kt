@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.photo.plan.PhotoPlanApp
 import com.photo.plan.data.local.entity.PlanEntity
 import com.photo.plan.data.repository.PlanRepository
+import com.photo.plan.data.repository.SampleRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val sampleDao = (application as PhotoPlanApp).database.sampleDao()
 
     val plans: StateFlow<List<PlanEntity>> = planRepository.getAllPlans()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pinnedPlans: StateFlow<List<PlanEntity>> = planRepository.getPinnedPlans()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val planProgressMap: StateFlow<Map<Long, Pair<Int, Int>>> =
@@ -45,11 +49,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    fun pinPlan(planId: Long) {
+        viewModelScope.launch {
+            planRepository.updatePinned(planId, true)
+        }
+    }
+
+    fun unpinPlan(planId: Long) {
+        viewModelScope.launch {
+            planRepository.updatePinned(planId, false)
+        }
+    }
+
     fun deletePlan(planId: Long) {
         viewModelScope.launch {
-            val sampleRepo = com.photo.plan.data.repository.SampleRepository(
-                sampleDao, getApplication()
-            )
+            val sampleRepo = SampleRepository(sampleDao, getApplication())
             sampleRepo.deleteSamplesByPlanId(planId)
             planRepository.deletePlan(planId)
         }

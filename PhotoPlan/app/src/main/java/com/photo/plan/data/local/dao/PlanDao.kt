@@ -14,6 +14,9 @@ interface PlanDao {
     @Query("SELECT * FROM plans ORDER BY updatedAt DESC")
     fun getAllPlans(): Flow<List<PlanEntity>>
 
+    @Query("SELECT * FROM plans WHERE isPinned = 1 ORDER BY updatedAt DESC")
+    fun getPinnedPlans(): Flow<List<PlanEntity>>
+
     @Query("SELECT * FROM plans WHERE id = :planId")
     suspend fun getPlanById(planId: Long): PlanEntity?
 
@@ -22,6 +25,9 @@ interface PlanDao {
 
     @Update
     suspend fun updatePlan(plan: PlanEntity)
+
+    @Query("UPDATE plans SET isPinned = :isPinned WHERE id = :planId")
+    suspend fun updatePinned(planId: Long, isPinned: Boolean)
 
     @Query("DELETE FROM plans WHERE id = :planId")
     suspend fun deletePlanById(planId: Long)
