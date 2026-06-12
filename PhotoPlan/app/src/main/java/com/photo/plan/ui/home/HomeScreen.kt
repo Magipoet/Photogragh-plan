@@ -1,12 +1,7 @@
 package com.photo.plan.ui.home
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,10 +49,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draganddrop.DragAndDropEvent
-import androidx.compose.ui.draganddrop.DragAndDropTransferData
-import androidx.compose.ui.draganddrop.mimeTypes
-import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -75,7 +66,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToCreate: () -> Unit,
@@ -87,13 +78,6 @@ fun HomeScreen(
     val pinnedPlans by viewModel.pinnedPlans.collectAsState()
     val progressMap by viewModel.planProgressMap.collectAsState()
     val hapticFeedback = LocalHapticFeedback.current
-
-    var isDragOver by remember { mutableStateOf(false) }
-    val targetElevation by animateDpAsState(
-        targetValue = if (isDragOver) 8.dp else 2.dp,
-        animationSpec = tween(durationMillis = 150),
-        label = "elevation"
-    )
 
     Scaffold(
         topBar = {
@@ -124,41 +108,16 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (pinnedPlans.isNotEmpty() || isDragOver) {
-                val bgColor = if (isDragOver) {
-                    MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)
-                } else {
-                    MaterialTheme.colorScheme.surface
-                }
+            if (pinnedPlans.isNotEmpty()) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .dragAndDropTarget(
-                            shouldStartDragAndDrop = { event ->
-                                event.mimeTypes().any { it == "text/plain" }
-                            },
-                            onStarted = { isDragOver = true },
-                            onEntered = { isDragOver = true },
-                            onExited = { isDragOver = false },
-                            onDropped = { event ->
-                                isDragOver = false
-                                val clipData = event.toAndroidDragEvent().clipData
-                                if (clipData.itemCount > 0) {
-                                    val item = clipData.getItemAt(0)
-                                    val planId = item.text.toString().toLongOrNull()
-                                    if (planId != null) {
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        viewModel.pinPlan(planId)
-                                        true
-                                    } else false
-                                } else false
-                            },
-                            onEnded = { isDragOver = false }
-                        ),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = targetElevation),
-                    colors = CardDefaults.cardColors(containerColor = bgColor)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(
@@ -178,34 +137,21 @@ fun HomeScreen(
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            if (isDragOver) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "松开放置到任务栏",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Green500
-                                )
-                            }
                         }
                         Spacer(modifier = Modifier.height(8.dp))
-                        if (pinnedPlans.isNotEmpty()) {
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(pinnedPlans, key = { it.id }) { plan ->
-                                    PinnedPlanItem(
-                                        plan = plan,
-                                        onClick = { onNavigateToDetail(plan.id) },
-                                        onUnpin = { viewModel.unpinPlan(plan.id) }
-                                    )
-                                }
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(pinnedPlans, key = { it.id }) { plan ->
+                                PinnedPlanItem(
+                                    plan = plan,
+                                    onClick = { onNavigateToDetail(plan.id) },
+                                    onUnpin = {
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.unpinPlan(plan.id)
+                                    }
+                                )
                             }
-                        } else {
-                            Text(
-                                text = "长按策划卡片拖动到此处添加到任务栏",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Gray500
-                            )
                         }
                     }
                 }
@@ -232,6 +178,7 @@ fun HomeScreen(
                             onEdit = { onNavigateToEdit(plan.id) },
                             onDelete = { viewModel.deletePlan(plan.id) },
                             onPin = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 if (plan.isPinned) viewModel.unpinPlan(plan.id)
                                 else viewModel.pinPlan(plan.id)
                             }
@@ -327,7 +274,6 @@ private fun EmptyState(modifier: Modifier = Modifier) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlanCard(
     plan: PlanEntity,
@@ -345,20 +291,10 @@ private fun PlanCard(
         targetValue = if (progress >= 1f) Green700 else Green500,
         label = "progressColor"
     )
-    val hapticFeedback = LocalHapticFeedback.current
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .dragAndDropSource(
-                onDragStart = {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    DragAndDropTransferData(
-                        clipData = android.content.ClipData.newPlainText("planId", plan.id.toString()),
-                        localState = plan
-                    )
-                }
-            )
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
