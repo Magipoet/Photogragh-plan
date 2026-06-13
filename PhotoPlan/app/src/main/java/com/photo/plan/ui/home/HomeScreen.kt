@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -37,6 +38,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.surfaceColorAtElevation
@@ -79,6 +81,8 @@ fun HomeScreen(
     val progressMap by viewModel.planProgressMap.collectAsState()
     val hapticFeedback = LocalHapticFeedback.current
 
+    var planToUnpin by remember { mutableStateOf<PlanEntity?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -108,37 +112,43 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (pinnedPlans.isNotEmpty()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.PushPin,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = Green500
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "任务栏",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PushPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Green500
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "任务栏",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "点击策划卡片右上角三点可添加到任务栏",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Gray500
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (pinnedPlans.isNotEmpty()) {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -146,10 +156,31 @@ fun HomeScreen(
                                 PinnedPlanItem(
                                     plan = plan,
                                     onClick = { onNavigateToDetail(plan.id) },
-                                    onUnpin = {
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        viewModel.unpinPlan(plan.id)
-                                    }
+                                    onUnpinRequest = { planToUnpin = plan }
+                                )
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(60.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Outlined.PushPin,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Gray300
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "暂无任务，点击策划卡片右上角三点 → 添加到任务栏",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Gray500
                                 )
                             }
                         }
@@ -189,17 +220,58 @@ fun HomeScreen(
             }
         }
     }
+
+    planToUnpin?.let { plan ->
+        UnpinConfirmDialog(
+            planName = plan.name,
+            onConfirm = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                viewModel.unpinPlan(plan.id)
+                planToUnpin = null
+            },
+            onDismiss = { planToUnpin = null }
+        )
+    }
+}
+
+@Composable
+private fun UnpinConfirmDialog(
+    planName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("移出任务栏", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Text(
+                text = "确定要将「$planName」移出任务栏吗？",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Gray700
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("移出任务栏", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消", color = Gray700)
+            }
+        }
+    )
 }
 
 @Composable
 private fun PinnedPlanItem(
     plan: PlanEntity,
     onClick: () -> Unit,
-    onUnpin: () -> Unit
+    onUnpinRequest: () -> Unit
 ) {
     Card(
         modifier = Modifier
-            .width(140.dp)
+            .width(150.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
@@ -222,12 +294,12 @@ private fun PinnedPlanItem(
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(
-                    onClick = onUnpin,
+                    onClick = onUnpinRequest,
                     modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.PushPin,
-                        contentDescription = "移除任务栏",
+                        contentDescription = "移出任务栏",
                         modifier = Modifier.size(14.dp),
                         tint = Green500
                     )
