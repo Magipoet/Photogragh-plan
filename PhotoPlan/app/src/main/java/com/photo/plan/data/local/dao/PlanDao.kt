@@ -31,4 +31,7 @@ interface PlanDao {
 
     @Query("DELETE FROM plans WHERE id = :planId")
     suspend fun deletePlanById(planId: Long)
+
+    @Query("SELECT name FROM plans")
+    suspend fun getAllPlanNames(): List<String>
 }

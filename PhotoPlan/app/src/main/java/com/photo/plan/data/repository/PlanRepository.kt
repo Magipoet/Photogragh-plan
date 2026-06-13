@@ -19,4 +19,6 @@ class PlanRepository(private val planDao: PlanDao) {
     suspend fun updatePinned(planId: Long, isPinned: Boolean) = planDao.updatePinned(planId, isPinned)
 
     suspend fun deletePlan(planId: Long) = planDao.deletePlanById(planId)
+
+    suspend fun getAllPlanNames(): List<String> = planDao.getAllPlanNames()
 }

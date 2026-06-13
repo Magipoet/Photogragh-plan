@@ -177,15 +177,32 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         _state.value = _state.value.copy(showNamePrompt = false)
     }
 
-    fun getDefaultName(): String {
+    fun getBaseDefaultName(): String {
         val calendar = Calendar.getInstance()
         val dateFormat = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
         return dateFormat.format(calendar.time)
     }
 
+    suspend fun getDefaultName(): String {
+        val baseName = getBaseDefaultName()
+        val existingNames = planRepository.getAllPlanNames()
+
+        if (!existingNames.contains(baseName)) {
+            return baseName
+        }
+
+        var suffix = 1
+        while (existingNames.contains("${baseName}_$suffix")) {
+            suffix++
+        }
+        return "${baseName}_$suffix"
+    }
+
     fun saveWithDefaultName(onSaved: (Long) -> Unit) {
-        val defaultName = getDefaultName()
-        _state.value = _state.value.copy(name = defaultName, showNamePrompt = false)
-        savePlan(onSaved)
+        viewModelScope.launch {
+            val defaultName = getDefaultName()
+            _state.value = _state.value.copy(name = defaultName, showNamePrompt = false)
+            savePlan(onSaved)
+        }
     }
 }

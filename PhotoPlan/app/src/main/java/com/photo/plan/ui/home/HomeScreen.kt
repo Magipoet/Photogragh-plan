@@ -99,14 +99,23 @@ fun HomeScreen(
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
 
     var taskBarBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
 
-    fun isPositionOverTaskBar(position: Offset): Boolean {
-        return position.x >= taskBarBounds.left &&
-            position.x <= taskBarBounds.right &&
-            position.y >= taskBarBounds.top &&
-            position.y <= taskBarBounds.bottom
+    fun isDragOverTaskBar(): Boolean {
+        if (draggingPlanId == null) return false
+        val previewWidthPx = with(density) { 200.dp.toPx() }
+        val previewHeightPx = with(density) { 70.dp.toPx() }
+        val previewLeft = dragPosition.x - previewWidthPx / 2
+        val previewRight = dragPosition.x + previewWidthPx / 2
+        val previewTop = dragPosition.y - previewHeightPx / 2
+        val previewBottom = dragPosition.y + previewHeightPx / 2
+
+        return previewLeft < taskBarBounds.right &&
+            previewRight > taskBarBounds.left &&
+            previewTop < taskBarBounds.bottom &&
+            previewBottom > taskBarBounds.top
     }
 
     Scaffold(
@@ -137,6 +146,9 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .onGloballyPositioned { layoutCoordinates ->
+                    rootBoxTopLeft = layoutCoordinates.boundsInRoot().topLeft
+                }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Card(
@@ -251,11 +263,11 @@ fun HomeScreen(
                                 onDragStart = { globalPosition ->
                                     draggingPlanId = plan.id
                                     dragPosition = globalPosition
-                                    isDragOver = isPositionOverTaskBar(globalPosition)
+                                    isDragOver = isDragOverTaskBar()
                                 },
                                 onDrag = { globalPosition ->
                                     dragPosition = globalPosition
-                                    isDragOver = isPositionOverTaskBar(globalPosition)
+                                    isDragOver = isDragOverTaskBar()
                                 },
                                 onDragEnd = {
                                     if (isDragOver && draggingPlanId != null && !plan.isPinned) {
@@ -282,9 +294,11 @@ fun HomeScreen(
                         .zIndex(1000f)
                         .width(200.dp)
                         .offset {
+                            val relativeX = dragPosition.x - rootBoxTopLeft.x
+                            val relativeY = dragPosition.y - rootBoxTopLeft.y
                             IntOffset(
-                                x = (dragPosition.x - previewWidthPx / 2).toInt(),
-                                y = (dragPosition.y - previewHeightPx / 2).toInt()
+                                x = (relativeX - previewWidthPx / 2).toInt(),
+                                y = (relativeY - previewHeightPx / 2).toInt()
                             )
                         }
                         .graphicsLayer(
