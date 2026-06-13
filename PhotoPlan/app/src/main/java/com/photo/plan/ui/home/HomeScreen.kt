@@ -16,6 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import android.content.ClipData
+import android.content.ClipDescription
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -52,6 +58,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,7 +77,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     onNavigateToCreate: () -> Unit,
@@ -82,6 +91,7 @@ fun HomeScreen(
     val hapticFeedback = LocalHapticFeedback.current
 
     var planToUnpin by remember { mutableStateOf<PlanEntity?>(null) }
+    var isDragOver by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -115,7 +125,37 @@ fun HomeScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .then(
+                        if (isDragOver) Modifier.border(2.dp, Green500, RoundedCornerShape(12.dp))
+                        else Modifier
+                    )
+                    .dragAndDropTarget(
+                        shouldStartDragAndDrop = { event ->
+                            event.mimeTypes().contains(ClipDescription.MIMETYPE_TEXT_PLAIN)
+                        },
+                        target = remember {
+                            object : DragAndDropTarget {
+                                override fun onDrop(event: DragAndDropEvent): Boolean {
+                                    val clipData = event.toAndroidDragEvent().clipData
+                                    val planId = clipData?.getItemAt(0)?.text?.toString()?.toLongOrNull()
+                                    if (planId != null) {
+                                        viewModel.pinPlan(planId)
+                                    }
+                                    isDragOver = false
+                                    return planId != null
+                                }
+
+                                override fun onEntered(event: DragAndDropEvent) {
+                                    isDragOver = true
+                                }
+
+                                override fun onExited(event: DragAndDropEvent) {
+                                    isDragOver = false
+                                }
+                            }
+                        }
+                    ),
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 colors = CardDefaults.cardColors(
@@ -142,7 +182,7 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "点击策划卡片右上角三点可添加到任务栏",
+                            text = "拖拽策划卡片至此或点击右上角三点可添加",
                             style = MaterialTheme.typography.bodySmall,
                             color = Gray500
                         )
@@ -178,7 +218,7 @@ fun HomeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "暂无任务，点击策划卡片右上角三点 → 添加到任务栏",
+                                    text = "暂无任务",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Gray500
                                 )
@@ -346,6 +386,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PlanCard(
     plan: PlanEntity,
@@ -367,6 +408,11 @@ private fun PlanCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .dragAndDropSource {
+                DragAndDropTransferData(
+                    clipData = ClipData.newPlainText("planId", plan.id.toString())
+                )
+            }
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
