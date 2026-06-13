@@ -1,7 +1,12 @@
 package com.photo.plan.ui.home
 
+import android.content.ClipData
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,20 +21,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import android.content.ClipData
-import android.content.ClipDescription
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.border
-import androidx.compose.foundation.draganddrop.dragAndDropSource
-import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -92,6 +91,7 @@ fun HomeScreen(
 
     var planToUnpin by remember { mutableStateOf<PlanEntity?>(null) }
     var isDragOver by remember { mutableStateOf(false) }
+    var draggingPlanId by remember { mutableStateOf<Long?>(null) }
 
     Scaffold(
         topBar = {
@@ -131,18 +131,16 @@ fun HomeScreen(
                         else Modifier
                     )
                     .dragAndDropTarget(
-                        shouldStartDragAndDrop = { event ->
-                            event.mimeTypes().contains(ClipDescription.MIMETYPE_TEXT_PLAIN)
-                        },
+                        shouldStartDragAndDrop = { true },
                         target = remember {
                             object : DragAndDropTarget {
                                 override fun onDrop(event: DragAndDropEvent): Boolean {
-                                    val clipData = event.toAndroidDragEvent().clipData
-                                    val planId = clipData?.getItemAt(0)?.text?.toString()?.toLongOrNull()
+                                    val planId = draggingPlanId
                                     if (planId != null) {
                                         viewModel.pinPlan(planId)
                                     }
                                     isDragOver = false
+                                    draggingPlanId = null
                                     return planId != null
                                 }
 
@@ -252,7 +250,8 @@ fun HomeScreen(
                                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 if (plan.isPinned) viewModel.unpinPlan(plan.id)
                                 else viewModel.pinPlan(plan.id)
-                            }
+                            },
+                            onDragStart = { draggingPlanId = plan.id }
                         )
                     }
                     item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -395,7 +394,8 @@ private fun PlanCard(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onPin: () -> Unit
+    onPin: () -> Unit,
+    onDragStart: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val dateFormatter = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
@@ -409,6 +409,7 @@ private fun PlanCard(
         modifier = Modifier
             .fillMaxWidth()
             .dragAndDropSource {
+                onDragStart()
                 DragAndDropTransferData(
                     clipData = ClipData.newPlainText("planId", plan.id.toString())
                 )
