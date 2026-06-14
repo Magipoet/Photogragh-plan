@@ -21,4 +21,8 @@ class PlanRepository(private val planDao: PlanDao) {
     suspend fun deletePlan(planId: Long) = planDao.deletePlanById(planId)
 
     suspend fun getAllPlanNames(): List<String> = planDao.getAllPlanNames()
+
+    suspend fun updatePinnedOrder(planId: Long, order: Int) = planDao.updatePinnedOrder(planId, order)
+
+    suspend fun getMaxPinnedOrder(): Int? = planDao.getMaxPinnedOrder()
 }

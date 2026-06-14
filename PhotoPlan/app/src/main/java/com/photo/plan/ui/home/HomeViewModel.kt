@@ -51,13 +51,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun pinPlan(planId: Long) {
         viewModelScope.launch {
-            planRepository.updatePinned(planId, true)
+            val maxOrder = planRepository.getMaxPinnedOrder() ?: -1
+            val plan = planRepository.getPlanById(planId)
+            if (plan != null) {
+                planRepository.updatePlan(
+                    plan.copy(isPinned = true, pinnedOrder = maxOrder + 1, updatedAt = System.currentTimeMillis())
+                )
+            }
         }
     }
 
     fun unpinPlan(planId: Long) {
         viewModelScope.launch {
-            planRepository.updatePinned(planId, false)
+            val plan = planRepository.getPlanById(planId)
+            if (plan != null) {
+                planRepository.updatePlan(
+                    plan.copy(isPinned = false, pinnedOrder = 0, updatedAt = System.currentTimeMillis())
+                )
+            }
+        }
+    }
+
+    fun reorderPinnedPlans(planIds: List<Long>) {
+        viewModelScope.launch {
+            planIds.forEachIndexed { index, planId ->
+                planRepository.updatePinnedOrder(planId, index)
+            }
         }
     }
 

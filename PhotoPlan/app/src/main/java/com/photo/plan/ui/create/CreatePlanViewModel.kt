@@ -191,7 +191,7 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
             return baseName
         }
 
-        var suffix = 1
+        var suffix = 2
         while (existingNames.contains("${baseName}_$suffix")) {
             suffix++
         }
