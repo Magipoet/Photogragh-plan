@@ -21,9 +21,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -108,6 +111,8 @@ fun HomeScreen(
 
     var taskBarBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
+
+    val taskBarListState = rememberLazyListState()
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
         ?: pinnedPlans.find { it.id == draggingPlanId }
@@ -222,6 +227,7 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         if (pinnedPlans.isNotEmpty()) {
                             LazyRow(
+                                state = taskBarListState,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(pinnedPlans, key = { it.id }) { plan ->
@@ -596,6 +602,7 @@ private fun PinnedPlanItem(
     val haptic = LocalHapticFeedback.current
     val density = LocalDensity.current
     var itemTopLeft by remember { mutableStateOf(Offset.Zero) }
+    val interactionSource = remember { MutableInteractionSource() }
 
     val shiftAnim = remember { Animatable(0f) }
     val scaleAnim = remember { Animatable(1f) }
@@ -668,7 +675,11 @@ private fun PinnedPlanItem(
                     shape = RoundedCornerShape(8.dp)
                 ) else Modifier
             )
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .pointerInput(Unit) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { startPosition ->

@@ -13,8 +13,8 @@ android {
         applicationId = "com.photo.plan"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "1.2.1"
+        versionCode = 16
+        versionName = "1.2.2"
     }
 
     buildTypes {
