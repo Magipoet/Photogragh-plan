@@ -1,6 +1,10 @@
 package com.photo.plan.ui.home
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -47,6 +51,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -174,7 +179,10 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                         .then(
-                            if (isDragOver && !isDraggingFromTaskBar) Modifier.border(2.dp, Green500, RoundedCornerShape(12.dp))
+                            if (isDragOver && !isDraggingFromTaskBar)
+                                Modifier.border(2.dp, Green500, RoundedCornerShape(12.dp))
+                            else if (isDraggingFromTaskBar)
+                                Modifier.border(2.dp, Green500.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                             else Modifier
                         )
                         .onGloballyPositioned { layoutCoordinates ->
@@ -219,24 +227,102 @@ fun HomeScreen(
                                 items(pinnedPlans, key = { it.id }) { plan ->
                                     val index = pinnedPlans.indexOf(plan)
                                     val isThisPinnedDragging = draggingPlanId == plan.id && isDraggingFromTaskBar
-                                    val showIndicatorBefore = isDraggingFromTaskBar &&
+                                    val draggedIndex = if (isDraggingFromTaskBar && draggingPlanId != null)
+                                        pinnedPlans.indexOfFirst { it.id == draggingPlanId } else -1
+                                    val shouldShiftRight = isDraggingFromTaskBar &&
+                                        targetInsertIndex >= 0 &&
+                                        draggedIndex >= 0 &&
+                                        !isThisPinnedDragging &&
+                                        index >= targetInsertIndex &&
+                                        index < draggedIndex
+                                    val shouldShiftLeft = isDraggingFromTaskBar &&
+                                        targetInsertIndex >= 0 &&
+                                        draggedIndex >= 0 &&
+                                        !isThisPinnedDragging &&
+                                        index > draggedIndex &&
+                                        index < targetInsertIndex
+                                    val isTargetSlot = isDraggingFromTaskBar &&
                                         targetInsertIndex == index &&
-                                        draggingPlanId != plan.id
+                                        draggedIndex != index
+                                    val isNearTargetSlot = isDraggingFromTaskBar &&
+                                        (targetInsertIndex == index || targetInsertIndex == index + 1) &&
+                                        !isThisPinnedDragging
+                                    val dimmed = isDraggingFromTaskBar &&
+                                        !isThisPinnedDragging &&
+                                        !isNearTargetSlot
+
                                     Box {
-                                        if (showIndicatorBefore) {
+                                        if (isTargetSlot && targetInsertIndex >= 0 && targetInsertIndex <= pinnedPlans.size) {
                                             Box(
                                                 modifier = Modifier
                                                     .align(Alignment.CenterStart)
-                                                    .offset { IntOffset((-with(density) { 6.dp.toPx() }).toInt(), 0) }
-                                                    .width(4.dp)
-                                                    .height(50.dp)
-                                                    .clip(RoundedCornerShape(2.dp))
-                                                    .zIndex(10f)
+                                                    .offset { IntOffset((-with(density) { 84.dp.toPx() }).toInt(), 0) }
+                                                    .width(150.dp)
+                                                    .height(70.dp)
+                                                    .zIndex(5f)
                                             ) {
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxSize()
+                                                        .background(
+                                                            color = Green500.copy(alpha = 0.12f),
+                                                            shape = RoundedCornerShape(8.dp)
+                                                        )
+                                                        .border(
+                                                            width = 2.dp,
+                                                            color = Green500.copy(alpha = 0.6f),
+                                                            shape = RoundedCornerShape(8.dp)
+                                                        )
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.CenterStart)
+                                                        .offset { IntOffset(-1, 0) }
+                                                        .width(3.dp)
+                                                        .height(54.dp)
+                                                        .clip(RoundedCornerShape(2.dp))
                                                         .background(Green500)
+                                                        .graphicsLayer {
+                                                            shadowElevation = 8f
+                                                        }
+                                                )
+                                            }
+                                        }
+                                        if (index == pinnedPlans.lastIndex &&
+                                            isDraggingFromTaskBar &&
+                                            targetInsertIndex == pinnedPlans.size) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.CenterEnd)
+                                                    .offset { IntOffset(with(density) { 8.dp.toPx() }.toInt(), 0) }
+                                                    .width(150.dp)
+                                                    .height(70.dp)
+                                                    .zIndex(5f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .background(
+                                                            color = Green500.copy(alpha = 0.12f),
+                                                            shape = RoundedCornerShape(8.dp)
+                                                        )
+                                                        .border(
+                                                            width = 2.dp,
+                                                            color = Green500.copy(alpha = 0.6f),
+                                                            shape = RoundedCornerShape(8.dp)
+                                                        )
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.CenterStart)
+                                                        .offset { IntOffset(-1, 0) }
+                                                        .width(3.dp)
+                                                        .height(54.dp)
+                                                        .clip(RoundedCornerShape(2.dp))
+                                                        .background(Green500)
+                                                        .graphicsLayer {
+                                                            shadowElevation = 8f
+                                                        }
                                                 )
                                             }
                                         }
@@ -287,26 +373,15 @@ fun HomeScreen(
                                                 dragPosition = Offset.Zero
                                                 targetInsertIndex = -1
                                             },
-                                            isDragging = isThisPinnedDragging
+                                            isDragging = isThisPinnedDragging,
+                                            shiftOffsetPx = when {
+                                                shouldShiftRight -> with(density) { 158.dp.toPx() }
+                                                shouldShiftLeft -> -with(density) { 158.dp.toPx() }
+                                                else -> 0f
+                                            },
+                                            dimmed = dimmed,
+                                            highlighted = isNearTargetSlot
                                         )
-                                        if (index == pinnedPlans.lastIndex && isDraggingFromTaskBar &&
-                                            targetInsertIndex == pinnedPlans.size) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .align(Alignment.CenterEnd)
-                                                    .offset { IntOffset(with(density) { 2.dp.toPx() }.toInt(), 0) }
-                                                    .width(4.dp)
-                                                    .height(50.dp)
-                                                    .clip(RoundedCornerShape(2.dp))
-                                                    .zIndex(10f)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .background(Green500)
-                                                )
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -409,11 +484,21 @@ fun HomeScreen(
                                 y = (relativeY - previewHeightPx / 2).toInt()
                             )
                         }
+                        .then(
+                            if (isDraggingFromTaskBar && isDragOverTaskBar())
+                                Modifier.border(3.dp, Green500, RoundedCornerShape(10.dp))
+                            else if (isDragOver && !isDraggingFromTaskBar)
+                                Modifier.border(3.dp, Green500, RoundedCornerShape(10.dp))
+                            else if (isDraggingFromTaskBar)
+                                Modifier.border(3.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
+                            else Modifier
+                        )
                         .graphicsLayer(
-                            scaleX = 1.05f,
-                            scaleY = 1.05f,
-                            alpha = 0.9f,
-                            shadowElevation = 8f
+                            scaleX = 1.12f,
+                            scaleY = 1.12f,
+                            alpha = 0.95f,
+                            shadowElevation = 16f,
+                            rotationZ = -2f
                         ),
                     shape = RoundedCornerShape(10.dp),
                     colors = CardDefaults.cardColors(
@@ -494,6 +579,7 @@ private fun UnpinConfirmDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PinnedPlanItem(
     plan: PlanEntity,
@@ -502,10 +588,65 @@ private fun PinnedPlanItem(
     onDragStart: (Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
-    isDragging: Boolean
+    isDragging: Boolean,
+    shiftOffsetPx: Float = 0f,
+    dimmed: Boolean = false,
+    highlighted: Boolean = false
 ) {
     val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
     var itemTopLeft by remember { mutableStateOf(Offset.Zero) }
+
+    val shiftAnim = remember { Animatable(0f) }
+    val scaleAnim = remember { Animatable(1f) }
+    val alphaAnim = remember { Animatable(1f) }
+
+    LaunchedEffect(shiftOffsetPx) {
+        shiftAnim.animateTo(
+            targetValue = shiftOffsetPx,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        )
+    }
+    LaunchedEffect(isDragging) {
+        scaleAnim.animateTo(
+            targetValue = if (isDragging) 0.92f else 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        )
+    }
+    val targetAlpha = when {
+        isDragging -> 0f
+        dimmed -> 0.45f
+        else -> 1f
+    }
+    LaunchedEffect(targetAlpha) {
+        alphaAnim.animateTo(
+            targetValue = targetAlpha,
+            animationSpec = tween(durationMillis = 180)
+        )
+    }
+
+    val bgColor by animateColorAsState(
+        targetValue = if (highlighted)
+            Green500.copy(alpha = 0.08f)
+        else
+            MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+        animationSpec = tween(durationMillis = 150),
+        label = "pinnedCardBg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (highlighted)
+            Green500.copy(alpha = 0.5f)
+        else
+            Color.Transparent,
+        animationSpec = tween(durationMillis = 150),
+        label = "pinnedCardBorder"
+    )
 
     Card(
         modifier = Modifier
@@ -514,10 +655,19 @@ private fun PinnedPlanItem(
                 itemTopLeft = layoutCoordinates.boundsInRoot().topLeft
             }
             .graphicsLayer {
-                alpha = if (isDragging) 0.3f else 1f
-                scaleX = if (isDragging) 0.95f else 1f
-                scaleY = if (isDragging) 0.95f else 1f
+                translationX = shiftAnim.value
+                scaleX = scaleAnim.value
+                scaleY = scaleAnim.value
+                alpha = alphaAnim.value
+                if (highlighted) shadowElevation = 6f
             }
+            .then(
+                if (highlighted) Modifier.border(
+                    width = 2.dp,
+                    color = borderColor,
+                    shape = RoundedCornerShape(8.dp)
+                ) else Modifier
+            )
             .clickable(onClick = onClick)
             .pointerInput(Unit) {
                 detectDragGesturesAfterLongPress(
@@ -537,10 +687,10 @@ private fun PinnedPlanItem(
                 )
             },
         shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
-        )
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (highlighted) 3.dp else 1.dp
+        ),
+        colors = CardDefaults.cardColors(containerColor = bgColor)
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Row(
