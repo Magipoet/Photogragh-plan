@@ -130,10 +130,10 @@ fun HomeScreen(
         val cardPaddingPx = with(density) { 12.dp.toPx() }
         val dropRelativeX = dragPosition.x - taskBarBounds.left - cardPaddingPx
         val draggedIndex = pinnedPlans.indexOfFirst { it.id == draggingPlanId }
-        var targetIndex = (dropRelativeX + itemWidthPx / 2) / (itemWidthPx + spacingPx)
-        targetIndex = targetIndex.toInt().coerceIn(0, pinnedPlans.size)
+        var targetIndex = ((dropRelativeX + itemWidthPx / 2) / (itemWidthPx + spacingPx)).toInt()
+            .coerceIn(0, pinnedPlans.size)
         if (draggedIndex >= 0 && targetIndex > draggedIndex) targetIndex -= 1
-        return targetIndex.toInt()
+        return targetIndex
     }
 
     Scaffold(
