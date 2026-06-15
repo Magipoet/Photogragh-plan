@@ -1,6 +1,7 @@
 package com.photo.plan.ui.home
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -98,6 +99,7 @@ fun HomeScreen(
     var draggingPlanId by remember { mutableStateOf<Long?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
     var isDraggingFromTaskBar by remember { mutableStateOf(false) }
+    var targetInsertIndex by remember { mutableStateOf(-1) }
 
     var taskBarBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
@@ -118,6 +120,20 @@ fun HomeScreen(
             previewRight > taskBarBounds.left &&
             previewTop < taskBarBounds.bottom &&
             previewBottom > taskBarBounds.top
+    }
+
+    fun computeTargetInsertIndex(): Int {
+        if (!isDraggingFromTaskBar || draggingPlanId == null || pinnedPlans.size <= 1) return -1
+        if (!isDragOverTaskBar()) return -1
+        val itemWidthPx = with(density) { 150.dp.toPx() }
+        val spacingPx = with(density) { 8.dp.toPx() }
+        val cardPaddingPx = with(density) { 12.dp.toPx() }
+        val dropRelativeX = dragPosition.x - taskBarBounds.left - cardPaddingPx
+        val draggedIndex = pinnedPlans.indexOfFirst { it.id == draggingPlanId }
+        var targetIndex = (dropRelativeX + itemWidthPx / 2) / (itemWidthPx + spacingPx)
+        targetIndex = targetIndex.toInt().coerceIn(0, pinnedPlans.size)
+        if (draggedIndex >= 0 && targetIndex > draggedIndex) targetIndex -= 1
+        return targetIndex.toInt()
     }
 
     Scaffold(
@@ -190,7 +206,7 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "长按拖拽策划卡片至此可添加",
+                                text = "长按拖拽策划卡片至此可添加，任务栏内可长按拖动排序",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Gray500
                             )
@@ -201,50 +217,97 @@ fun HomeScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(pinnedPlans, key = { it.id }) { plan ->
+                                    val index = pinnedPlans.indexOf(plan)
                                     val isThisPinnedDragging = draggingPlanId == plan.id && isDraggingFromTaskBar
-                                    PinnedPlanItem(
-                                        plan = plan,
-                                        onClick = { onNavigateToDetail(plan.id) },
-                                        onUnpinRequest = { planToUnpin = plan },
-                                        onDragStart = { globalPosition ->
-                                            draggingPlanId = plan.id
-                                            dragPosition = globalPosition
-                                            isDraggingFromTaskBar = true
-                                            isDragOver = isDragOverTaskBar()
-                                        },
-                                        onDrag = { globalPosition ->
-                                            dragPosition = globalPosition
-                                            isDragOver = isDragOverTaskBar()
-                                        },
-                                        onDragEnd = {
-                                            if (isDragOver && draggingPlanId != null) {
-                                                val itemWidthPx = with(density) { 150.dp.toPx() }
-                                                val spacingPx = with(density) { 8.dp.toPx() }
-                                                val cardPaddingPx = with(density) { 12.dp.toPx() }
-                                                val dropRelativeX = dragPosition.x - taskBarBounds.left - cardPaddingPx
-                                                val targetGapIndex = (dropRelativeX / (itemWidthPx + spacingPx)).toInt()
-                                                    .coerceIn(0, pinnedPlans.lastIndex)
-                                                val otherPinnedPlans = pinnedPlans.filter { it.id != draggingPlanId }
-                                                val draggedPlan = pinnedPlans.find { it.id == draggingPlanId }
-                                                if (draggedPlan != null) {
-                                                    val newOrder = otherPinnedPlans.toMutableList()
-                                                    val insertIndex = targetGapIndex.coerceAtMost(newOrder.size)
-                                                    if (insertIndex != pinnedPlans.indexOf(draggedPlan)) {
-                                                        newOrder.add(insertIndex, draggedPlan)
-                                                        viewModel.reorderPinnedPlans(newOrder.map { it.id })
-                                                    }
-                                                }
-                                            } else if (draggingPlanId != null) {
-                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.unpinPlan(draggingPlanId!!)
+                                    val showIndicatorBefore = isDraggingFromTaskBar &&
+                                        targetInsertIndex == index &&
+                                        draggingPlanId != plan.id
+                                    Box {
+                                        if (showIndicatorBefore) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.CenterStart)
+                                                    .offset { IntOffset((-with(density) { 6.dp.toPx() }).toInt(), 0) }
+                                                    .width(4.dp)
+                                                    .height(50.dp)
+                                                    .clip(RoundedCornerShape(2.dp))
+                                                    .zIndex(10f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .background(Green500)
+                                                )
                                             }
-                                            draggingPlanId = null
-                                            isDraggingFromTaskBar = false
-                                            isDragOver = false
-                                            dragPosition = Offset.Zero
-                                        },
-                                        isDragging = isThisPinnedDragging
-                                    )
+                                        }
+                                        PinnedPlanItem(
+                                            plan = plan,
+                                            onClick = { onNavigateToDetail(plan.id) },
+                                            onUnpinRequest = { planToUnpin = plan },
+                                            onDragStart = { globalPosition ->
+                                                draggingPlanId = plan.id
+                                                dragPosition = globalPosition
+                                                isDraggingFromTaskBar = true
+                                                isDragOver = isDragOverTaskBar()
+                                                targetInsertIndex = computeTargetInsertIndex()
+                                            },
+                                            onDrag = { globalPosition ->
+                                                dragPosition = globalPosition
+                                                isDragOver = isDragOverTaskBar()
+                                                targetInsertIndex = computeTargetInsertIndex()
+                                            },
+                                            onDragEnd = {
+                                                if (isDragOver && draggingPlanId != null) {
+                                                    val itemWidthPx = with(density) { 150.dp.toPx() }
+                                                    val spacingPx = with(density) { 8.dp.toPx() }
+                                                    val cardPaddingPx = with(density) { 12.dp.toPx() }
+                                                    val dropRelativeX = dragPosition.x - taskBarBounds.left - cardPaddingPx
+                                                    val targetGapIndex = ((dropRelativeX + itemWidthPx / 2) / (itemWidthPx + spacingPx)).toInt()
+                                                        .coerceIn(0, pinnedPlans.size)
+                                                    val otherPinnedPlans = pinnedPlans.filter { it.id != draggingPlanId }
+                                                    val draggedPlan = pinnedPlans.find { it.id == draggingPlanId }
+                                                    val draggedIdx = draggedPlan?.let { pinnedPlans.indexOf(it) } ?: -1
+                                                    if (draggedPlan != null) {
+                                                        val newOrder = otherPinnedPlans.toMutableList()
+                                                        var insertIndex = targetGapIndex
+                                                        if (draggedIdx >= 0 && insertIndex > draggedIdx) insertIndex -= 1
+                                                        insertIndex = insertIndex.coerceAtMost(newOrder.size)
+                                                        if (insertIndex != draggedIdx) {
+                                                            newOrder.add(insertIndex, draggedPlan)
+                                                            viewModel.reorderPinnedPlans(newOrder.map { it.id })
+                                                        }
+                                                    }
+                                                } else if (draggingPlanId != null) {
+                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.unpinPlan(draggingPlanId!!)
+                                                }
+                                                draggingPlanId = null
+                                                isDraggingFromTaskBar = false
+                                                isDragOver = false
+                                                dragPosition = Offset.Zero
+                                                targetInsertIndex = -1
+                                            },
+                                            isDragging = isThisPinnedDragging
+                                        )
+                                        if (index == pinnedPlans.lastIndex && isDraggingFromTaskBar &&
+                                            targetInsertIndex == pinnedPlans.size) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.CenterEnd)
+                                                    .offset { IntOffset(with(density) { 2.dp.toPx() }.toInt(), 0) }
+                                                    .width(4.dp)
+                                                    .height(50.dp)
+                                                    .clip(RoundedCornerShape(2.dp))
+                                                    .zIndex(10f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .background(Green500)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -305,6 +368,8 @@ fun HomeScreen(
                                     draggingPlanId = plan.id
                                     dragPosition = globalPosition
                                     isDragOver = isDragOverTaskBar()
+                                    isDraggingFromTaskBar = false
+                                    targetInsertIndex = -1
                                 },
                                 onDrag = { globalPosition ->
                                     dragPosition = globalPosition
@@ -319,6 +384,7 @@ fun HomeScreen(
                                     isDraggingFromTaskBar = false
                                     isDragOver = false
                                     dragPosition = Offset.Zero
+                                    targetInsertIndex = -1
                                 },
                                 isDragging = isThisDragging
                             )

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PlanDao {
-    @Query("SELECT * FROM plans ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM plans ORDER BY isPinned DESC, pinnedOrder ASC, updatedAt DESC")
     fun getAllPlans(): Flow<List<PlanEntity>>
 
     @Query("SELECT * FROM plans WHERE isPinned = 1 ORDER BY pinnedOrder ASC")
