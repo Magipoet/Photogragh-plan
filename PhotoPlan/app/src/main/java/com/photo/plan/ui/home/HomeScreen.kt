@@ -58,6 +58,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -112,21 +113,50 @@ fun HomeScreen(
     var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
 
     val taskBarListState = rememberLazyListState()
-    var planIdToScrollTo by remember { mutableStateOf<Long?>(null) }
+    var planIdToEnsureVisible by remember { mutableStateOf<Long?>(null) }
+    val coroutineScope = rememberCoroutineScope()
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
         ?: pinnedPlans.find { it.id == draggingPlanId }
 
     LaunchedEffect(pinnedPlans) {
-        planIdToScrollTo?.let { planId ->
+        planIdToEnsureVisible?.let { planId ->
             val index = pinnedPlans.indexOfFirst { it.id == planId }
             if (index >= 0) {
-                taskBarListState.animateScrollToItem(
-                    index = index,
-                    scrollOffset = with(density) { (-8).dp.toPx().toInt() }
-                )
+                val layoutInfo = taskBarListState.layoutInfo
+                val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                val visibleIndices = visibleItemsInfo.map { it.index }
+                if (index !in visibleIndices) {
+                    val firstVisible = visibleIndices.firstOrNull() ?: 0
+                    val lastVisible = visibleIndices.lastOrNull() ?: 0
+                    if (index < firstVisible) {
+                        taskBarListState.animateScrollToItem(index)
+                    } else if (index > lastVisible) {
+                        taskBarListState.animateScrollToItem(
+                            index = (index - (lastVisible - firstVisible)).coerceAtLeast(0)
+                        )
+                    }
+                }
             }
-            planIdToScrollTo = null
+            planIdToEnsureVisible = null
+        }
+    }
+
+    LaunchedEffect(isDraggingFromTaskBar, draggingPlanId, dragPosition) {
+        if (isDraggingFromTaskBar && draggingPlanId != null) {
+            val layoutInfo = taskBarListState.layoutInfo
+            val viewportStart = layoutInfo.viewportStart.toFloat()
+            val viewportEnd = layoutInfo.viewportEnd.toFloat()
+            val edgeZone = with(density) { 60.dp.toPx() }
+            val scrollAmount = with(density) { 8.dp.toPx() }
+            when {
+                dragPosition.x < viewportStart + edgeZone && dragPosition.x > viewportStart -> {
+                    taskBarListState.scrollBy(-scrollAmount)
+                }
+                dragPosition.x > viewportEnd - edgeZone && dragPosition.x < viewportEnd -> {
+                    taskBarListState.scrollBy(scrollAmount)
+                }
+            }
         }
     }
 
@@ -379,7 +409,7 @@ fun HomeScreen(
                                                         insertIndex = insertIndex.coerceAtMost(newOrder.size)
                                                         if (insertIndex != draggedIdx) {
                                                             newOrder.add(insertIndex, draggedPlan)
-                                                            planIdToScrollTo = draggingPlanId
+                                                            planIdToEnsureVisible = draggingPlanId
                                                             viewModel.reorderPinnedPlans(newOrder.map { it.id })
                                                         }
                                                     }
