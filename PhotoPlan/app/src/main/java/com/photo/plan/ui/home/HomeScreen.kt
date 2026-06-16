@@ -55,6 +55,7 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -107,7 +108,6 @@ fun HomeScreen(
     var draggingPlanId by remember { mutableStateOf<Long?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
     var isDraggingFromTaskBar by remember { mutableStateOf(false) }
-    var targetInsertIndex by remember { mutableStateOf(-1) }
 
     var taskBarBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
@@ -115,6 +115,38 @@ fun HomeScreen(
     val taskBarListState = rememberLazyListState()
     var planIdToEnsureVisible by remember { mutableStateOf<Long?>(null) }
     var autoScrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    val targetInsertIndex by remember {
+        derivedStateOf {
+            if (!isDraggingFromTaskBar || draggingPlanId == null || pinnedPlans.size <= 1) {
+                -1
+            } else if (!isDragOver) {
+                -1
+            } else {
+                val layoutInfo = taskBarListState.layoutInfo
+                val visibleItems = layoutInfo.visibleItemsInfo
+                val cardPaddingPx = with(density) { 12.dp.toPx() }
+                val dropXInContainer = dragPosition.x - taskBarBounds.left - cardPaddingPx + layoutInfo.viewportStartOffset
+                val draggedIndex = pinnedPlans.indexOfFirst { it.id == draggingPlanId }
+
+                var targetIdx = -1
+                for (item in visibleItems) {
+                    val itemCenter = item.offset + item.size / 2
+                    if (dropXInContainer < itemCenter) {
+                        targetIdx = item.index
+                        break
+                    }
+                }
+                if (targetIdx == -1) {
+                    targetIdx = visibleItems.lastOrNull()?.let { it.index + 1 } ?: pinnedPlans.size
+                }
+
+                targetIdx = targetIdx.coerceIn(0, pinnedPlans.size)
+                if (draggedIndex >= 0 && targetIdx > draggedIndex) targetIdx -= 1
+                targetIdx
+            }
+        }
+    }
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
         ?: pinnedPlans.find { it.id == draggingPlanId }
@@ -179,7 +211,6 @@ fun HomeScreen(
                             taskBarListState.scroll {
                                 scrollBy(if (shouldScrollLeft) -actualStep else actualStep)
                             }
-                            targetInsertIndex = computeTargetInsertIndex()
                         }
                     }
                 }
@@ -204,33 +235,6 @@ fun HomeScreen(
             previewRight > taskBarBounds.left &&
             previewTop < taskBarBounds.bottom &&
             previewBottom > taskBarBounds.top
-    }
-
-    fun computeTargetInsertIndex(): Int {
-        if (!isDraggingFromTaskBar || draggingPlanId == null || pinnedPlans.size <= 1) return -1
-        if (!isDragOverTaskBar()) return -1
-
-        val layoutInfo = taskBarListState.layoutInfo
-        val visibleItems = layoutInfo.visibleItemsInfo
-        val cardPaddingPx = with(density) { 12.dp.toPx() }
-        val dropXInContainer = dragPosition.x - taskBarBounds.left - cardPaddingPx + layoutInfo.viewportStartOffset
-        val draggedIndex = pinnedPlans.indexOfFirst { it.id == draggingPlanId }
-
-        var targetIndex = -1
-        for (item in visibleItems) {
-            val itemCenter = item.offset + item.size / 2
-            if (dropXInContainer < itemCenter) {
-                targetIndex = item.index
-                break
-            }
-        }
-        if (targetIndex == -1) {
-            targetIndex = visibleItems.lastOrNull()?.let { it.index + 1 } ?: pinnedPlans.size
-        }
-
-        targetIndex = targetIndex.coerceIn(0, pinnedPlans.size)
-        if (draggedIndex >= 0 && targetIndex > draggedIndex) targetIndex -= 1
-        return targetIndex
     }
 
     Scaffold(
@@ -414,28 +418,23 @@ fun HomeScreen(
                                                 dragPosition = globalPosition
                                                 isDraggingFromTaskBar = true
                                                 isDragOver = isDragOverTaskBar()
-                                                targetInsertIndex = computeTargetInsertIndex()
                                             },
                                             onDrag = { globalPosition ->
                                                 dragPosition = globalPosition
                                                 isDragOver = isDragOverTaskBar()
-                                                targetInsertIndex = computeTargetInsertIndex()
                                             },
                                             onDragEnd = {
-                                                if (isDragOver && draggingPlanId != null) {
-                                                    val finalInsertIndex = computeTargetInsertIndex()
-                                                    if (finalInsertIndex >= 0) {
-                                                        val otherPinnedPlans = pinnedPlans.filter { it.id != draggingPlanId }
-                                                        val draggedPlan = pinnedPlans.find { it.id == draggingPlanId }
-                                                        val draggedIdx = draggedPlan?.let { pinnedPlans.indexOf(it) } ?: -1
-                                                        if (draggedPlan != null && finalInsertIndex != draggedIdx) {
-                                                            val newOrder = otherPinnedPlans.toMutableList()
-                                                            val insertIndex = finalInsertIndex.coerceIn(0, newOrder.size)
-                                                            newOrder.add(insertIndex, draggedPlan)
-                                                            planIdToEnsureVisible = draggingPlanId
-                                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                            viewModel.reorderPinnedPlans(newOrder.map { it.id })
-                                                        }
+                                                if (isDragOver && draggingPlanId != null && targetInsertIndex >= 0) {
+                                                    val otherPinnedPlans = pinnedPlans.filter { it.id != draggingPlanId }
+                                                    val draggedPlan = pinnedPlans.find { it.id == draggingPlanId }
+                                                    val draggedIdx = draggedPlan?.let { pinnedPlans.indexOf(it) } ?: -1
+                                                    if (draggedPlan != null && targetInsertIndex != draggedIdx) {
+                                                        val newOrder = otherPinnedPlans.toMutableList()
+                                                        val insertIndex = targetInsertIndex.coerceIn(0, newOrder.size)
+                                                        newOrder.add(insertIndex, draggedPlan)
+                                                        planIdToEnsureVisible = draggingPlanId
+                                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        viewModel.reorderPinnedPlans(newOrder.map { it.id })
                                                     }
                                                 } else if (draggingPlanId != null) {
                                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -445,7 +444,6 @@ fun HomeScreen(
                                                 isDraggingFromTaskBar = false
                                                 isDragOver = false
                                                 dragPosition = Offset.Zero
-                                                targetInsertIndex = -1
                                             },
                                             isDragging = isThisPinnedDragging,
                                             shiftOffsetPx = when {
@@ -518,7 +516,6 @@ fun HomeScreen(
                                     dragPosition = globalPosition
                                     isDragOver = isDragOverTaskBar()
                                     isDraggingFromTaskBar = false
-                                    targetInsertIndex = -1
                                 },
                                 onDrag = { globalPosition ->
                                     dragPosition = globalPosition
@@ -533,7 +530,6 @@ fun HomeScreen(
                                     isDraggingFromTaskBar = false
                                     isDragOver = false
                                     dragPosition = Offset.Zero
-                                    targetInsertIndex = -1
                                 },
                                 isDragging = isThisDragging
                             )
