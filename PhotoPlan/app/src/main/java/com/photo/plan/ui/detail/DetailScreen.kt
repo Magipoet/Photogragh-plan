@@ -652,16 +652,19 @@ private fun SampleGridCard(
                     .fillMaxWidth()
                     .align(Alignment.BottomStart)
                     .background(Color.Black.copy(alpha = if (sample.comment.isEmpty()) 0.35f else 0.6f))
-                    .padding(8.dp)
                     .clickable { onEditComment() }
             ) {
-                if (sample.comment.isNotEmpty()) {
-                    Text(
-                        text = sample.comment,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = White,
-                        maxLines = 2
-                    )
+                Box(modifier = Modifier.padding(8.dp)) {
+                    if (sample.comment.isNotEmpty()) {
+                        Text(
+                            text = sample.comment,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = White,
+                            maxLines = 2
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
                 }
             }
         }

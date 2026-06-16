@@ -115,10 +115,13 @@ fun HomeScreen(
     val taskBarListState = rememberLazyListState()
     var planIdToEnsureVisible by remember { mutableStateOf<Long?>(null) }
     var autoScrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var localPinnedPlans by remember { mutableStateOf<List<PlanEntity>>(emptyList()) }
+    var isLocalDragMode by remember { mutableStateOf(false) }
 
     val targetInsertIndex by remember {
         derivedStateOf {
-            if (!isDraggingFromTaskBar || draggingPlanId == null || pinnedPlans.size <= 1) {
+            val currentPlans = if (isLocalDragMode) localPinnedPlans else pinnedPlans
+            if (!isDraggingFromTaskBar || draggingPlanId == null || currentPlans.size <= 1) {
                 -1
             } else if (!isDragOver) {
                 -1
@@ -127,7 +130,7 @@ fun HomeScreen(
                 val visibleItems = layoutInfo.visibleItemsInfo
                 val cardPaddingPx = with(density) { 12.dp.toPx() }
                 val dropXInContainer = dragPosition.x - taskBarBounds.left - cardPaddingPx + layoutInfo.viewportStartOffset
-                val draggedIndex = pinnedPlans.indexOfFirst { it.id == draggingPlanId }
+                val draggedIndex = currentPlans.indexOfFirst { it.id == draggingPlanId }
 
                 var targetIdx = -1
                 for (item in visibleItems) {
@@ -138,10 +141,10 @@ fun HomeScreen(
                     }
                 }
                 if (targetIdx == -1) {
-                    targetIdx = visibleItems.lastOrNull()?.let { it.index + 1 } ?: pinnedPlans.size
+                    targetIdx = visibleItems.lastOrNull()?.let { it.index + 1 } ?: currentPlans.size
                 }
 
-                targetIdx = targetIdx.coerceIn(0, pinnedPlans.size)
+                targetIdx = targetIdx.coerceIn(0, currentPlans.size)
                 if (draggedIndex >= 0 && targetIdx > draggedIndex) targetIdx -= 1
                 targetIdx
             }
@@ -150,6 +153,31 @@ fun HomeScreen(
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
         ?: pinnedPlans.find { it.id == draggingPlanId }
+
+    LaunchedEffect(targetInsertIndex, isLocalDragMode) {
+        if (isLocalDragMode && targetInsertIndex >= 0 && draggingPlanId != null) {
+            val currentList = localPinnedPlans
+            val draggedIndex = currentList.indexOfFirst { it.id == draggingPlanId }
+            if (draggedIndex >= 0 && targetInsertIndex != draggedIndex) {
+                val otherPlans = currentList.filter { it.id != draggingPlanId }
+                val newList = otherPlans.toMutableList()
+                val insertIdx = targetInsertIndex.coerceIn(0, otherPlans.size)
+                val draggedPlan = currentList[draggedIndex]
+                newList.add(insertIdx, draggedPlan)
+                localPinnedPlans = newList
+            }
+        }
+    }
+
+    LaunchedEffect(isDraggingFromTaskBar, pinnedPlans) {
+        if (isLocalDragMode && !isDraggingFromTaskBar) {
+            val localIds = localPinnedPlans.map { it.id }
+            val pinnedIds = pinnedPlans.map { it.id }
+            if (localIds == pinnedIds) {
+                isLocalDragMode = false
+            }
+        }
+    }
 
     LaunchedEffect(pinnedPlans) {
         planIdToEnsureVisible?.let { planId ->
@@ -317,144 +345,65 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         if (pinnedPlans.isNotEmpty()) {
+                            val displayPlans = if (isLocalDragMode) localPinnedPlans else pinnedPlans
                             LazyRow(
                                 state = taskBarListState,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(pinnedPlans, key = { it.id }) { plan ->
-                                    val index = pinnedPlans.indexOf(plan)
+                                items(displayPlans, key = { it.id }) { plan ->
+                                    val index = displayPlans.indexOf(plan)
                                     val isThisPinnedDragging = draggingPlanId == plan.id && isDraggingFromTaskBar
-                                    val draggedIndex = if (isDraggingFromTaskBar && draggingPlanId != null)
-                                        pinnedPlans.indexOfFirst { it.id == draggingPlanId } else -1
-                                    val shouldShiftRight = isDraggingFromTaskBar &&
-                                        !isThisPinnedDragging &&
-                                        draggedIndex >= 0 &&
-                                        targetInsertIndex >= 0 &&
-                                        index >= targetInsertIndex &&
-                                        index < draggedIndex
-                                    val shouldShiftLeft = isDraggingFromTaskBar &&
-                                        !isThisPinnedDragging &&
-                                        draggedIndex >= 0 &&
-                                        targetInsertIndex >= 0 &&
-                                        index > draggedIndex &&
-                                        index <= targetInsertIndex
-                                    val isTargetSlot = isDraggingFromTaskBar &&
-                                        targetInsertIndex == index &&
-                                        draggedIndex != index
+                                    val isTargetSlot = false
                                     val isNearTargetSlot = isDraggingFromTaskBar &&
-                                        (targetInsertIndex == index || targetInsertIndex == index + 1) &&
-                                        !isThisPinnedDragging
+                                        !isThisPinnedDragging &&
+                                        targetInsertIndex >= 0 &&
+                                        (index == targetInsertIndex || index == targetInsertIndex - 1)
                                     val dimmed = isDraggingFromTaskBar &&
                                         !isThisPinnedDragging &&
                                         !isNearTargetSlot
 
-                                    Box {
-                                        if (isTargetSlot && targetInsertIndex >= 0 && targetInsertIndex <= pinnedPlans.size) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .align(Alignment.CenterStart)
-                                                    .zIndex(5f)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .width(150.dp)
-                                                        .height(70.dp)
-                                                        .background(
-                                                            color = Green500.copy(alpha = 0.12f),
-                                                            shape = RoundedCornerShape(8.dp)
-                                                        )
-                                                        .border(
-                                                            width = 2.dp,
-                                                            color = Green500.copy(alpha = 0.6f),
-                                                            shape = RoundedCornerShape(8.dp)
-                                                        )
-                                                )
+                                    PinnedPlanItem(
+                                        plan = plan,
+                                        onClick = { onNavigateToDetail(plan.id) },
+                                        onUnpinRequest = { planToUnpin = plan },
+                                        onDragStart = { globalPosition ->
+                                            if (!isLocalDragMode) {
+                                                localPinnedPlans = pinnedPlans
+                                                isLocalDragMode = true
                                             }
-                                        }
-                                        if (index == pinnedPlans.lastIndex &&
-                                            isDraggingFromTaskBar &&
-                                            targetInsertIndex == pinnedPlans.size) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .align(Alignment.CenterEnd)
-                                                    .offset { IntOffset(with(density) { 8.dp.toPx() }.toInt(), 0) }
-                                                    .width(150.dp)
-                                                    .height(70.dp)
-                                                    .zIndex(5f)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxSize()
-                                                        .background(
-                                                            color = Green500.copy(alpha = 0.12f),
-                                                            shape = RoundedCornerShape(8.dp)
-                                                        )
-                                                        .border(
-                                                            width = 2.dp,
-                                                            color = Green500.copy(alpha = 0.6f),
-                                                            shape = RoundedCornerShape(8.dp)
-                                                        )
-                                                )
-                                                Box(
-                                                    modifier = Modifier
-                                                        .align(Alignment.CenterStart)
-                                                        .offset { IntOffset(-1, 0) }
-                                                        .width(3.dp)
-                                                        .height(54.dp)
-                                                        .clip(RoundedCornerShape(2.dp))
-                                                        .background(Green500)
-                                                        .graphicsLayer {
-                                                            shadowElevation = 8f
-                                                        }
-                                                )
-                                            }
-                                        }
-                                        PinnedPlanItem(
-                                            plan = plan,
-                                            onClick = { onNavigateToDetail(plan.id) },
-                                            onUnpinRequest = { planToUnpin = plan },
-                                            onDragStart = { globalPosition ->
-                                                draggingPlanId = plan.id
-                                                dragPosition = globalPosition
-                                                isDraggingFromTaskBar = true
-                                                isDragOver = isDragOverTaskBar()
-                                            },
-                                            onDrag = { globalPosition ->
-                                                dragPosition = globalPosition
-                                                isDragOver = isDragOverTaskBar()
-                                            },
-                                            onDragEnd = {
-                                                if (isDragOver && draggingPlanId != null && targetInsertIndex >= 0) {
-                                                    val otherPinnedPlans = pinnedPlans.filter { it.id != draggingPlanId }
-                                                    val draggedPlan = pinnedPlans.find { it.id == draggingPlanId }
-                                                    val draggedIdx = draggedPlan?.let { pinnedPlans.indexOf(it) } ?: -1
-                                                    if (draggedPlan != null && targetInsertIndex != draggedIdx) {
-                                                        val newOrder = otherPinnedPlans.toMutableList()
-                                                        val insertIndex = targetInsertIndex.coerceIn(0, newOrder.size)
-                                                        newOrder.add(insertIndex, draggedPlan)
-                                                        planIdToEnsureVisible = draggingPlanId
-                                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        viewModel.reorderPinnedPlans(newOrder.map { it.id })
-                                                    }
-                                                } else if (draggingPlanId != null) {
+                                            draggingPlanId = plan.id
+                                            dragPosition = globalPosition
+                                            isDraggingFromTaskBar = true
+                                            isDragOver = isDragOverTaskBar()
+                                        },
+                                        onDrag = { globalPosition ->
+                                            dragPosition = globalPosition
+                                            isDragOver = isDragOverTaskBar()
+                                        },
+                                        onDragEnd = {
+                                            if (isDragOver && draggingPlanId != null && targetInsertIndex >= 0) {
+                                                val finalPlanList = localPinnedPlans
+                                                val draggedIdx = finalPlanList.indexOfFirst { it.id == draggingPlanId }
+                                                if (draggedIdx >= 0 && targetInsertIndex != draggedIdx) {
+                                                    planIdToEnsureVisible = draggingPlanId
                                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    viewModel.unpinPlan(draggingPlanId!!)
+                                                    viewModel.reorderPinnedPlans(finalPlanList.map { it.id })
                                                 }
-                                                draggingPlanId = null
-                                                isDraggingFromTaskBar = false
-                                                isDragOver = false
-                                                dragPosition = Offset.Zero
-                                            },
-                                            isDragging = isThisPinnedDragging,
-                                            shiftOffsetPx = when {
-                                                shouldShiftRight -> with(density) { 158.dp.toPx() }
-                                                shouldShiftLeft -> -with(density) { 158.dp.toPx() }
-                                                else -> 0f
-                                            },
-                                            dimmed = dimmed,
-                                            highlighted = isNearTargetSlot
-                                        )
-                                    }
+                                            } else if (draggingPlanId != null) {
+                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                viewModel.unpinPlan(draggingPlanId!!)
+                                            }
+                                            isLocalDragMode = false
+                                            draggingPlanId = null
+                                            isDraggingFromTaskBar = false
+                                            isDragOver = false
+                                            dragPosition = Offset.Zero
+                                        },
+                                        isDragging = isThisPinnedDragging,
+                                        shiftOffsetPx = 0f,
+                                        dimmed = dimmed,
+                                        highlighted = isNearTargetSlot
+                                    )
                                 }
                             }
                         } else {
