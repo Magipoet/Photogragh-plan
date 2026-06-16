@@ -171,15 +171,14 @@ fun HomeScreen(
                     val paddingPx = with(density) { 12.dp.toPx() }
                     when {
                         itemLeft < viewportStartOffset + paddingPx -> {
-                            taskBarListState.animateScrollToItem(index, 0)
+                            taskBarListState.scrollToItem(index, 0)
                         }
                         itemRight > viewportEndOffset - paddingPx -> {
-                            val scrollOffset = (itemRight - viewportEndOffset + paddingPx + itemWidth).toInt()
-                            taskBarListState.animateScrollToItem(index, 0)
+                            taskBarListState.scrollToItem(index, 0)
                         }
                     }
                 } else {
-                    taskBarListState.animateScrollToItem(index, 0)
+                    taskBarListState.scrollToItem(index, 0)
                 }
             }
             planIdToEnsureVisible = null
@@ -374,7 +373,7 @@ fun HomeScreen(
                                             dragPosition = Offset.Zero
 
                                             scope.launch {
-                                                kotlinx.coroutines.delay(200)
+                                                kotlinx.coroutines.delay(50)
                                                 if (finalIsDragOver && finalDraggingPlanId != null && finalInsertIndex >= 0) {
                                                     val otherPinnedPlans = currentPinnedPlans.filter { it.id != finalDraggingPlanId }
                                                     val draggedPlan = currentPinnedPlans.find { it.id == finalDraggingPlanId }
@@ -383,9 +382,10 @@ fun HomeScreen(
                                                         val newOrder = otherPinnedPlans.toMutableList()
                                                         val insertIndex = finalInsertIndex.coerceIn(0, newOrder.size)
                                                         newOrder.add(insertIndex, draggedPlan)
-                                                        planIdToEnsureVisible = finalDraggingPlanId
                                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                                         viewModel.reorderPinnedPlans(newOrder.map { it.id })
+                                                        kotlinx.coroutines.delay(30)
+                                                        taskBarListState.scrollToItem(insertIndex, 0)
                                                     }
                                                 } else if (finalDraggingPlanId != null) {
                                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
