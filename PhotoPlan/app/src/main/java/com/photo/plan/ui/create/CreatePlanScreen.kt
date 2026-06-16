@@ -49,12 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -78,21 +73,10 @@ fun CreatePlanScreen(
     viewModel: CreatePlanViewModel = viewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
-    var suggestedName by remember { mutableStateOf("") }
-    var isLoadingSuggestedName by remember { mutableStateOf(false) }
 
     LaunchedEffect(planId) {
         if (planId != null) {
             viewModel.loadPlan(planId)
-        }
-    }
-
-    LaunchedEffect(state.showNamePrompt) {
-        if (state.showNamePrompt) {
-            isLoadingSuggestedName = true
-            suggestedName = viewModel.getDefaultName()
-            isLoadingSuggestedName = false
         }
     }
 
@@ -256,6 +240,7 @@ fun CreatePlanScreen(
         }
 
         if (state.showNamePrompt) {
+            val defaultName = viewModel.getDefaultName()
             AlertDialog(
                 onDismissRequest = viewModel::dismissNamePrompt,
                 title = { Text("请填写策划名称") },
@@ -263,19 +248,11 @@ fun CreatePlanScreen(
                     Column {
                         Text("为了更好地管理您的摄影策划，请输入一个策划名称。")
                         Spacer(modifier = Modifier.height(12.dp))
-                        if (isLoadingSuggestedName) {
-                            Text(
-                                text = "正在生成推荐名称...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Gray500
-                            )
-                        } else {
-                            Text(
-                                text = "推荐名称：$suggestedName",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                        Text(
+                            text = "推荐名称：$defaultName",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 confirmButton = {
@@ -288,14 +265,7 @@ fun CreatePlanScreen(
                         }
                         Spacer(modifier = Modifier.weight(1f))
                         Button(
-                            onClick = {
-                                coroutineScope.launch {
-                                    val nameToUse = suggestedName.ifBlank { viewModel.getDefaultName() }
-                                    viewModel.updateName(nameToUse)
-                                    viewModel.savePlan(onNavigateToDetail)
-                                }
-                            },
-                            enabled = !isLoadingSuggestedName,
+                            onClick = { viewModel.saveWithDefaultName(onNavigateToDetail) },
                             colors = ButtonDefaults.buttonColors(containerColor = Green500)
                         ) {
                             Text("使用推荐名称")
