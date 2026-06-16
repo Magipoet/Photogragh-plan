@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -113,9 +112,23 @@ fun HomeScreen(
     var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
 
     val taskBarListState = rememberLazyListState()
+    var planIdToScrollTo by remember { mutableStateOf<Long?>(null) }
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
         ?: pinnedPlans.find { it.id == draggingPlanId }
+
+    LaunchedEffect(pinnedPlans) {
+        planIdToScrollTo?.let { planId ->
+            val index = pinnedPlans.indexOfFirst { it.id == planId }
+            if (index >= 0) {
+                taskBarListState.animateScrollToItem(
+                    index = index,
+                    scrollOffset = with(density) { (-8).dp.toPx().toInt() }
+                )
+            }
+            planIdToScrollTo = null
+        }
+    }
 
     fun isDragOverTaskBar(): Boolean {
         if (draggingPlanId == null) return false
@@ -366,6 +379,7 @@ fun HomeScreen(
                                                         insertIndex = insertIndex.coerceAtMost(newOrder.size)
                                                         if (insertIndex != draggedIdx) {
                                                             newOrder.add(insertIndex, draggedPlan)
+                                                            planIdToScrollTo = draggingPlanId
                                                             viewModel.reorderPinnedPlans(newOrder.map { it.id })
                                                         }
                                                     }
@@ -478,10 +492,11 @@ fun HomeScreen(
             if (draggingPlan != null) {
                 val previewWidthPx = with(density) { 200.dp.toPx() }
                 val previewHeightPx = with(density) { 70.dp.toPx() }
-                Card(
+                Box(
                     modifier = Modifier
                         .zIndex(1000f)
                         .width(200.dp)
+                        .height(70.dp)
                         .offset {
                             val relativeX = dragPosition.x - rootBoxTopLeft.x
                             val relativeY = dragPosition.y - rootBoxTopLeft.y
@@ -490,6 +505,14 @@ fun HomeScreen(
                                 y = (relativeY - previewHeightPx / 2).toInt()
                             )
                         }
+                        .graphicsLayer(
+                            scaleX = 1.12f,
+                            scaleY = 1.12f,
+                            alpha = 0.95f,
+                            shadowElevation = 16f,
+                            rotationZ = -2f,
+                            clip = true
+                        )
                         .then(
                             if (isDraggingFromTaskBar && isDragOverTaskBar())
                                 Modifier.border(3.dp, Green500, RoundedCornerShape(10.dp))
@@ -499,44 +522,41 @@ fun HomeScreen(
                                 Modifier.border(3.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
                             else Modifier
                         )
-                        .graphicsLayer(
-                            scaleX = 1.12f,
-                            scaleY = 1.12f,
-                            alpha = 0.95f,
-                            shadowElevation = 16f,
-                            rotationZ = -2f
-                        ),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.PushPin,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = Green500
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
+                    Card(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.PushPin,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = Green500
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = draggingPlan.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val dateFormatter = SimpleDateFormat("MM/dd", Locale.getDefault())
                             Text(
-                                text = draggingPlan.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                text = dateFormatter.format(Date(draggingPlan.createdAt)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Gray500,
+                                fontSize = 11.sp
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        val dateFormatter = SimpleDateFormat("MM/dd", Locale.getDefault())
-                        Text(
-                            text = dateFormatter.format(Date(draggingPlan.createdAt)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Gray500,
-                            fontSize = 11.sp
-                        )
                     }
                 }
             }
@@ -605,7 +625,6 @@ private fun PinnedPlanItem(
     val interactionSource = remember { MutableInteractionSource() }
 
     val shiftAnim = remember { Animatable(0f) }
-    val scaleAnim = remember { Animatable(1f) }
     val alphaAnim = remember { Animatable(1f) }
 
     LaunchedEffect(shiftOffsetPx) {
@@ -614,15 +633,6 @@ private fun PinnedPlanItem(
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioMediumBouncy,
                 stiffness = Spring.StiffnessLow
-            )
-        )
-    }
-    LaunchedEffect(isDragging) {
-        scaleAnim.animateTo(
-            targetValue = if (isDragging) 0.92f else 1f,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
             )
         )
     }
@@ -663,8 +673,6 @@ private fun PinnedPlanItem(
             }
             .graphicsLayer {
                 translationX = shiftAnim.value
-                scaleX = scaleAnim.value
-                scaleY = scaleAnim.value
                 alpha = alphaAnim.value
                 if (highlighted) shadowElevation = 6f
             }
