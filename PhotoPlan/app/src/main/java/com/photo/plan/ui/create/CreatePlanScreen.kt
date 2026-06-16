@@ -1,5 +1,6 @@
 package com.photo.plan.ui.create
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -81,23 +82,34 @@ fun CreatePlanScreen(
     }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(),
-        onResult = { uris -> viewModel.addUris(uris) }
-    )
-
-    val documentPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments(),
-        onResult = { uris -> viewModel.addUris(uris) }
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                val data = result.data
+                val uris = mutableListOf<Uri>()
+                data?.clipData?.let { clipData ->
+                    for (i in 0 until clipData.itemCount) {
+                        uris.add(clipData.getItemAt(i).uri)
+                    }
+                }
+                data?.data?.let { uri ->
+                    if (uris.isEmpty()) {
+                        uris.add(uri)
+                    }
+                }
+                viewModel.addUris(uris)
+            }
+        }
     )
 
     val launchImagePicker: () -> Unit = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            photoPickerLauncher.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )
-        } else {
-            documentPickerLauncher.launch(arrayOf("image/*"))
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "image/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addCategory(Intent.CATEGORY_OPENABLE)
         }
+        val chooserIntent = Intent.createChooser(intent, "选择图片")
+        photoPickerLauncher.launch(chooserIntent)
     }
 
     Scaffold(
