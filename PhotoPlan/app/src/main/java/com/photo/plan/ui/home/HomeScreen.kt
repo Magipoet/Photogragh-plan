@@ -289,18 +289,8 @@ fun HomeScreen(
                                     val isThisPinnedDragging = draggingPlanId == plan.id && isDraggingFromTaskBar
                                     val draggedIndex = if (isDraggingFromTaskBar && draggingPlanId != null)
                                         pinnedPlans.indexOfFirst { it.id == draggingPlanId } else -1
-                                    val shouldShiftRight = isDraggingFromTaskBar &&
-                                        targetInsertIndex >= 0 &&
-                                        draggedIndex >= 0 &&
-                                        !isThisPinnedDragging &&
-                                        index >= targetInsertIndex &&
-                                        index < draggedIndex
-                                    val shouldShiftLeft = isDraggingFromTaskBar &&
-                                        targetInsertIndex >= 0 &&
-                                        draggedIndex >= 0 &&
-                                        !isThisPinnedDragging &&
-                                        index > draggedIndex &&
-                                        index < targetInsertIndex
+                                    val shouldShiftRight = false
+                                    val shouldShiftLeft = false
                                     val isTargetSlot = isDraggingFromTaskBar &&
                                         targetInsertIndex == index &&
                                         draggedIndex != index
