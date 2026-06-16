@@ -115,13 +115,11 @@ fun HomeScreen(
     val taskBarListState = rememberLazyListState()
     var planIdToEnsureVisible by remember { mutableStateOf<Long?>(null) }
     var autoScrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    var localPinnedPlans by remember { mutableStateOf<List<PlanEntity>>(emptyList()) }
-    var isLocalDragMode by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     val targetInsertIndex by remember {
         derivedStateOf {
-            val currentPlans = if (isLocalDragMode) localPinnedPlans else pinnedPlans
-            if (!isDraggingFromTaskBar || draggingPlanId == null || currentPlans.size <= 1) {
+            if (!isDraggingFromTaskBar || draggingPlanId == null || pinnedPlans.size <= 1) {
                 -1
             } else if (!isDragOver) {
                 -1
@@ -130,7 +128,7 @@ fun HomeScreen(
                 val visibleItems = layoutInfo.visibleItemsInfo
                 val cardPaddingPx = with(density) { 12.dp.toPx() }
                 val dropXInContainer = dragPosition.x - taskBarBounds.left - cardPaddingPx + layoutInfo.viewportStartOffset
-                val draggedIndex = currentPlans.indexOfFirst { it.id == draggingPlanId }
+                val draggedIndex = pinnedPlans.indexOfFirst { it.id == draggingPlanId }
 
                 var targetIdx = -1
                 for (item in visibleItems) {
@@ -141,10 +139,10 @@ fun HomeScreen(
                     }
                 }
                 if (targetIdx == -1) {
-                    targetIdx = visibleItems.lastOrNull()?.let { it.index + 1 } ?: currentPlans.size
+                    targetIdx = visibleItems.lastOrNull()?.let { it.index + 1 } ?: pinnedPlans.size
                 }
 
-                targetIdx = targetIdx.coerceIn(0, currentPlans.size)
+                targetIdx = targetIdx.coerceIn(0, pinnedPlans.size)
                 if (draggedIndex >= 0 && targetIdx > draggedIndex) targetIdx -= 1
                 targetIdx
             }
@@ -153,31 +151,6 @@ fun HomeScreen(
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
         ?: pinnedPlans.find { it.id == draggingPlanId }
-
-    LaunchedEffect(targetInsertIndex, isLocalDragMode) {
-        if (isLocalDragMode && targetInsertIndex >= 0 && draggingPlanId != null) {
-            val currentList = localPinnedPlans
-            val draggedIndex = currentList.indexOfFirst { it.id == draggingPlanId }
-            if (draggedIndex >= 0 && targetInsertIndex != draggedIndex) {
-                val otherPlans = currentList.filter { it.id != draggingPlanId }
-                val newList = otherPlans.toMutableList()
-                val insertIdx = targetInsertIndex.coerceIn(0, otherPlans.size)
-                val draggedPlan = currentList[draggedIndex]
-                newList.add(insertIdx, draggedPlan)
-                localPinnedPlans = newList
-            }
-        }
-    }
-
-    LaunchedEffect(isDraggingFromTaskBar, pinnedPlans) {
-        if (isLocalDragMode && !isDraggingFromTaskBar) {
-            val localIds = localPinnedPlans.map { it.id }
-            val pinnedIds = pinnedPlans.map { it.id }
-            if (localIds == pinnedIds) {
-                isLocalDragMode = false
-            }
-        }
-    }
 
     LaunchedEffect(pinnedPlans) {
         planIdToEnsureVisible?.let { planId ->
@@ -345,15 +318,27 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         if (pinnedPlans.isNotEmpty()) {
-                            val displayPlans = if (isLocalDragMode) localPinnedPlans else pinnedPlans
                             LazyRow(
                                 state = taskBarListState,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(displayPlans, key = { it.id }) { plan ->
-                                    val index = displayPlans.indexOf(plan)
+                                items(pinnedPlans, key = { it.id }) { plan ->
+                                    val index = pinnedPlans.indexOf(plan)
                                     val isThisPinnedDragging = draggingPlanId == plan.id && isDraggingFromTaskBar
-                                    val isTargetSlot = false
+                                    val draggedIndex = if (isDraggingFromTaskBar && draggingPlanId != null)
+                                        pinnedPlans.indexOfFirst { it.id == draggingPlanId } else -1
+                                    val shouldShiftRight = isDraggingFromTaskBar &&
+                                        !isThisPinnedDragging &&
+                                        draggedIndex >= 0 &&
+                                        targetInsertIndex >= 0 &&
+                                        index >= targetInsertIndex &&
+                                        index < draggedIndex
+                                    val shouldShiftLeft = isDraggingFromTaskBar &&
+                                        !isThisPinnedDragging &&
+                                        draggedIndex >= 0 &&
+                                        targetInsertIndex >= 0 &&
+                                        index > draggedIndex &&
+                                        index <= targetInsertIndex
                                     val isNearTargetSlot = isDraggingFromTaskBar &&
                                         !isThisPinnedDragging &&
                                         targetInsertIndex >= 0 &&
@@ -367,10 +352,6 @@ fun HomeScreen(
                                         onClick = { onNavigateToDetail(plan.id) },
                                         onUnpinRequest = { planToUnpin = plan },
                                         onDragStart = { globalPosition ->
-                                            if (!isLocalDragMode) {
-                                                localPinnedPlans = pinnedPlans
-                                                isLocalDragMode = true
-                                            }
                                             draggingPlanId = plan.id
                                             dragPosition = globalPosition
                                             isDraggingFromTaskBar = true
@@ -381,26 +362,42 @@ fun HomeScreen(
                                             isDragOver = isDragOverTaskBar()
                                         },
                                         onDragEnd = {
-                                            if (isDragOver && draggingPlanId != null && targetInsertIndex >= 0) {
-                                                val finalPlanList = localPinnedPlans
-                                                val draggedIdx = finalPlanList.indexOfFirst { it.id == draggingPlanId }
-                                                if (draggedIdx >= 0 && targetInsertIndex != draggedIdx) {
-                                                    planIdToEnsureVisible = draggingPlanId
-                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    viewModel.reorderPinnedPlans(finalPlanList.map { it.id })
-                                                }
-                                            } else if (draggingPlanId != null) {
-                                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                viewModel.unpinPlan(draggingPlanId!!)
-                                            }
-                                            isLocalDragMode = false
+                                            val finalDraggingPlanId = draggingPlanId
+                                            val finalInsertIndex = targetInsertIndex
+                                            val finalIsDragOver = isDragOver
+                                            val currentPinnedPlans = pinnedPlans
+
                                             draggingPlanId = null
                                             isDraggingFromTaskBar = false
                                             isDragOver = false
                                             dragPosition = Offset.Zero
+
+                                            scope.launch {
+                                                kotlinx.coroutines.delay(200)
+                                                if (finalIsDragOver && finalDraggingPlanId != null && finalInsertIndex >= 0) {
+                                                    val otherPinnedPlans = currentPinnedPlans.filter { it.id != finalDraggingPlanId }
+                                                    val draggedPlan = currentPinnedPlans.find { it.id == finalDraggingPlanId }
+                                                    val draggedIdx = draggedPlan?.let { currentPinnedPlans.indexOf(it) } ?: -1
+                                                    if (draggedPlan != null && finalInsertIndex != draggedIdx) {
+                                                        val newOrder = otherPinnedPlans.toMutableList()
+                                                        val insertIndex = finalInsertIndex.coerceIn(0, newOrder.size)
+                                                        newOrder.add(insertIndex, draggedPlan)
+                                                        planIdToEnsureVisible = finalDraggingPlanId
+                                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        viewModel.reorderPinnedPlans(newOrder.map { it.id })
+                                                    }
+                                                } else if (finalDraggingPlanId != null) {
+                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.unpinPlan(finalDraggingPlanId)
+                                                }
+                                            }
                                         },
                                         isDragging = isThisPinnedDragging,
-                                        shiftOffsetPx = 0f,
+                                        shiftOffsetPx = when {
+                                            shouldShiftRight -> with(density) { 158.dp.toPx() }
+                                            shouldShiftLeft -> -with(density) { 158.dp.toPx() }
+                                            else -> 0f
+                                        },
                                         dimmed = dimmed,
                                         highlighted = isNearTargetSlot
                                     )
@@ -630,8 +627,8 @@ private fun PinnedPlanItem(
         shiftAnim.animateTo(
             targetValue = shiftOffsetPx,
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
             )
         )
     }

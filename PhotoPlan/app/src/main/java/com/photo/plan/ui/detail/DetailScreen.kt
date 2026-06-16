@@ -654,7 +654,7 @@ private fun SampleGridCard(
                     .background(Color.Black.copy(alpha = if (sample.comment.isEmpty()) 0.35f else 0.6f))
                     .clickable { onEditComment() }
             ) {
-                Box(modifier = Modifier.padding(8.dp)) {
+                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
                     if (sample.comment.isNotEmpty()) {
                         Text(
                             text = sample.comment,
@@ -663,7 +663,7 @@ private fun SampleGridCard(
                             maxLines = 2
                         )
                     } else {
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(11.dp))
                     }
                 }
             }
