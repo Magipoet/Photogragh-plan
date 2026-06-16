@@ -647,20 +647,22 @@ private fun SampleGridCard(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomStart)
-                    .background(Color.Black.copy(alpha = if (sample.comment.isEmpty()) 0.45f else 0.6f))
-                    .padding(8.dp)
-                    .clickable { onEditComment() }
-            ) {
-                Text(
-                    text = sample.comment.ifEmpty { "点击添加注释" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = White.copy(alpha = if (sample.comment.isEmpty()) 0.85f else 1f),
-                    maxLines = 2
-                )
+            if (sample.comment.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomStart)
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(8.dp)
+                        .clickable { onEditComment() }
+                ) {
+                    Text(
+                        text = sample.comment,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = White,
+                        maxLines = 2
+                    )
+                }
             }
         }
     }

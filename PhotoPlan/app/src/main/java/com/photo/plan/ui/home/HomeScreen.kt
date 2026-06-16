@@ -531,12 +531,12 @@ fun HomeScreen(
             }
 
             if (draggingPlan != null) {
-                val previewWidthPx = with(density) { 200.dp.toPx() }
+                val previewWidthPx = with(density) { 150.dp.toPx() }
                 val previewHeightPx = with(density) { 70.dp.toPx() }
                 Box(
                     modifier = Modifier
                         .zIndex(1000f)
-                        .width(200.dp)
+                        .width(150.dp)
                         .height(70.dp)
                         .offset {
                             val relativeX = dragPosition.x - rootBoxTopLeft.x
@@ -547,11 +547,11 @@ fun HomeScreen(
                             )
                         }
                         .graphicsLayer(
-                            scaleX = 1.12f,
-                            scaleY = 1.12f,
+                            scaleX = 1f,
+                            scaleY = 1f,
                             alpha = 0.95f,
-                            shadowElevation = 16f,
-                            rotationZ = -2f,
+                            shadowElevation = 8f,
+                            rotationZ = 0f,
                             clip = true
                         )
                         .then(
