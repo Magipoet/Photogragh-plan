@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.withFrameMillis
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -144,31 +143,27 @@ fun HomeScreen(
     LaunchedEffect(isDraggingFromTaskBar, draggingPlanId) {
         if (isDraggingFromTaskBar && draggingPlanId != null) {
             while (true) {
-                withFrameMillis {
-                    if (taskBarBounds != androidx.compose.ui.geometry.Rect.Zero) {
-                        val viewportStartPx = taskBarBounds.left
-                        val viewportEndPx = taskBarBounds.right
-                        val edgeZone = with(density) { 80.dp.toPx() }
-                        val maxScrollSpeed = with(density) { 500.dp.toPx() }
+                kotlinx.coroutines.delay(12)
+                if (taskBarBounds != androidx.compose.ui.geometry.Rect.Zero) {
+                    val viewportStartPx = taskBarBounds.left
+                    val viewportEndPx = taskBarBounds.right
+                    val edgeZone = with(density) { 80.dp.toPx() }
+                    val scrollStep = with(density) { 10.dp.toPx() }
 
-                        val scrollDelta = when {
-                            dragPosition.x < viewportStartPx + edgeZone -> {
-                                val distanceIntoZone = viewportStartPx + edgeZone - dragPosition.x
-                                val ratio = (distanceIntoZone / edgeZone).coerceIn(0f, 1.5f)
-                                -maxScrollSpeed * ratio * 0.016f
-                            }
-                            dragPosition.x > viewportEndPx - edgeZone -> {
-                                val distanceIntoZone = dragPosition.x - (viewportEndPx - edgeZone)
-                                val ratio = (distanceIntoZone / edgeZone).coerceIn(0f, 1.5f)
-                                maxScrollSpeed * ratio * 0.016f
-                            }
-                            else -> 0f
+                    val shouldScrollLeft = dragPosition.x < viewportStartPx + edgeZone
+                    val shouldScrollRight = dragPosition.x > viewportEndPx - edgeZone
+
+                    if (shouldScrollLeft || shouldScrollRight) {
+                        val distanceIntoZone = if (shouldScrollLeft) {
+                            viewportStartPx + edgeZone - dragPosition.x
+                        } else {
+                            dragPosition.x - (viewportEndPx - edgeZone)
                         }
+                        val speedMultiplier = (distanceIntoZone / edgeZone).coerceIn(0.5f, 3f)
+                        val actualStep = scrollStep * speedMultiplier
 
-                        if (scrollDelta != 0f) {
-                            taskBarListState.scroll {
-                                scrollBy(scrollDelta)
-                            }
+                        taskBarListState.scroll {
+                            scrollBy(if (shouldScrollLeft) -actualStep else actualStep)
                         }
                     }
                 }
