@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.withFrameMillis
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -140,18 +141,36 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(isDraggingFromTaskBar, draggingPlanId, dragPosition) {
-        if (isDraggingFromTaskBar && draggingPlanId != null && taskBarBounds != androidx.compose.ui.geometry.Rect.Zero) {
-            val viewportStartPx = taskBarBounds.left
-            val viewportEndPx = taskBarBounds.right
-            val edgeZone = with(density) { 60.dp.toPx() }
-            val scrollAmount = with(density) { 8.dp.toPx() }
-            when {
-                dragPosition.x < viewportStartPx + edgeZone && dragPosition.x > viewportStartPx -> {
-                    taskBarListState.scroll { scrollBy(-scrollAmount) }
-                }
-                dragPosition.x > viewportEndPx - edgeZone && dragPosition.x < viewportEndPx -> {
-                    taskBarListState.scroll { scrollBy(scrollAmount) }
+    LaunchedEffect(isDraggingFromTaskBar, draggingPlanId) {
+        if (isDraggingFromTaskBar && draggingPlanId != null) {
+            while (true) {
+                withFrameMillis {
+                    if (taskBarBounds != androidx.compose.ui.geometry.Rect.Zero) {
+                        val viewportStartPx = taskBarBounds.left
+                        val viewportEndPx = taskBarBounds.right
+                        val edgeZone = with(density) { 80.dp.toPx() }
+                        val maxScrollSpeed = with(density) { 500.dp.toPx() }
+
+                        val scrollDelta = when {
+                            dragPosition.x < viewportStartPx + edgeZone -> {
+                                val distanceIntoZone = viewportStartPx + edgeZone - dragPosition.x
+                                val ratio = (distanceIntoZone / edgeZone).coerceIn(0f, 1.5f)
+                                -maxScrollSpeed * ratio * 0.016f
+                            }
+                            dragPosition.x > viewportEndPx - edgeZone -> {
+                                val distanceIntoZone = dragPosition.x - (viewportEndPx - edgeZone)
+                                val ratio = (distanceIntoZone / edgeZone).coerceIn(0f, 1.5f)
+                                maxScrollSpeed * ratio * 0.016f
+                            }
+                            else -> 0f
+                        }
+
+                        if (scrollDelta != 0f) {
+                            taskBarListState.scroll {
+                                scrollBy(scrollDelta)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -695,13 +714,15 @@ private fun PinnedPlanItem(
     Card(
         modifier = Modifier
             .width(150.dp)
+            .height(70.dp)
             .onGloballyPositioned { layoutCoordinates ->
                 itemTopLeft = layoutCoordinates.boundsInRoot().topLeft
             }
             .graphicsLayer {
                 translationX = shiftAnim.value
                 alpha = alphaAnim.value
-                if (highlighted) shadowElevation = 6f
+                scaleX = 1f
+                scaleY = 1f
             }
             .then(
                 if (highlighted) Modifier.border(
@@ -734,7 +755,12 @@ private fun PinnedPlanItem(
             },
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = if (highlighted) 3.dp else 1.dp
+            defaultElevation = 1.dp,
+            pressedElevation = 1.dp,
+            focusedElevation = 1.dp,
+            hoveredElevation = 1.dp,
+            draggedElevation = 1.dp,
+            disabledElevation = 0.dp
         ),
         colors = CardDefaults.cardColors(containerColor = bgColor)
     ) {

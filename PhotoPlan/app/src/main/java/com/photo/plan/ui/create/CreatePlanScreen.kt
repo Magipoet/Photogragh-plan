@@ -240,7 +240,6 @@ fun CreatePlanScreen(
         }
 
         if (state.showNamePrompt) {
-            val defaultName = viewModel.getDefaultName()
             AlertDialog(
                 onDismissRequest = viewModel::dismissNamePrompt,
                 title = { Text("请填写策划名称") },
@@ -249,7 +248,7 @@ fun CreatePlanScreen(
                         Text("为了更好地管理您的摄影策划，请输入一个策划名称。")
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = "推荐名称：$defaultName",
+                            text = "推荐名称：${state.recommendedName}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary
                         )

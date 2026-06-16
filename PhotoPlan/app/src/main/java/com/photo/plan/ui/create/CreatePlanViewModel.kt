@@ -28,7 +28,8 @@ data class CreatePlanState(
     val isSaving: Boolean = false,
     val isEditMode: Boolean = false,
     val planId: Long? = null,
-    val showNamePrompt: Boolean = false
+    val showNamePrompt: Boolean = false,
+    val recommendedName: String = ""
 )
 
 class CreatePlanViewModel(application: Application) : AndroidViewModel(application) {
@@ -129,7 +130,10 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         if (!hasImages) return
 
         if (name.isEmpty()) {
-            _state.value = _state.value.copy(showNamePrompt = true)
+            viewModelScope.launch {
+                val recommended = generateUniqueDefaultName()
+                _state.value = _state.value.copy(showNamePrompt = true, recommendedName = recommended)
+            }
             return
         }
 
@@ -183,9 +187,26 @@ class CreatePlanViewModel(application: Application) : AndroidViewModel(applicati
         return dateFormat.format(calendar.time)
     }
 
+    suspend fun generateUniqueDefaultName(): String {
+        val baseName = getDefaultName()
+        val allNames = planRepository.getAllPlanNames()
+
+        if (!allNames.contains(baseName)) {
+            return baseName
+        }
+
+        var number = 2
+        while (allNames.contains("$baseName-$number")) {
+            number++
+        }
+        return "$baseName-$number"
+    }
+
     fun saveWithDefaultName(onSaved: (Long) -> Unit) {
-        val defaultName = getDefaultName()
-        _state.value = _state.value.copy(name = defaultName, showNamePrompt = false)
-        savePlan(onSaved)
+        viewModelScope.launch {
+            val uniqueName = generateUniqueDefaultName()
+            _state.value = _state.value.copy(name = uniqueName, showNamePrompt = false)
+            savePlan(onSaved)
+        }
     }
 }
