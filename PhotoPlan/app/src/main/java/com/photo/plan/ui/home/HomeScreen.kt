@@ -58,7 +58,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,7 +113,6 @@ fun HomeScreen(
 
     val taskBarListState = rememberLazyListState()
     var planIdToEnsureVisible by remember { mutableStateOf<Long?>(null) }
-    val coroutineScope = rememberCoroutineScope()
 
     val draggingPlan = plans.find { it.id == draggingPlanId }
         ?: pinnedPlans.find { it.id == draggingPlanId }
@@ -143,18 +141,17 @@ fun HomeScreen(
     }
 
     LaunchedEffect(isDraggingFromTaskBar, draggingPlanId, dragPosition) {
-        if (isDraggingFromTaskBar && draggingPlanId != null) {
-            val layoutInfo = taskBarListState.layoutInfo
-            val viewportStart = layoutInfo.viewportStart.toFloat()
-            val viewportEnd = layoutInfo.viewportEnd.toFloat()
+        if (isDraggingFromTaskBar && draggingPlanId != null && taskBarBounds != androidx.compose.ui.geometry.Rect.Zero) {
+            val viewportStartPx = taskBarBounds.left
+            val viewportEndPx = taskBarBounds.right
             val edgeZone = with(density) { 60.dp.toPx() }
             val scrollAmount = with(density) { 8.dp.toPx() }
             when {
-                dragPosition.x < viewportStart + edgeZone && dragPosition.x > viewportStart -> {
-                    taskBarListState.scrollBy(-scrollAmount)
+                dragPosition.x < viewportStartPx + edgeZone && dragPosition.x > viewportStartPx -> {
+                    taskBarListState.scroll { scrollBy(-scrollAmount) }
                 }
-                dragPosition.x > viewportEnd - edgeZone && dragPosition.x < viewportEnd -> {
-                    taskBarListState.scrollBy(scrollAmount)
+                dragPosition.x > viewportEndPx - edgeZone && dragPosition.x < viewportEndPx -> {
+                    taskBarListState.scroll { scrollBy(scrollAmount) }
                 }
             }
         }
