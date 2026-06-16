@@ -346,7 +346,7 @@ fun HomeScreen(
                         val longPressTimeout = 500L
                         val touchSlop = with(density) { 18.dp.toPx() }
 
-                        val longPressJob = launch {
+                        val longPressJob = scope.launch {
                             delay(longPressTimeout)
                             if (!hasMoved && pressedPlan != null) {
                                 longPressTriggered = true
