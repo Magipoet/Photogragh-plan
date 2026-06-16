@@ -162,29 +162,18 @@ fun HomeScreen(
                 val viewportRight = viewportStartOffset + layoutInfo.viewportSize.width.toFloat()
 
                 val targetIdx: Int = when {
+                    dropXInContainer <= 0f -> {
+                        0
+                    }
                     dropXInContainer < viewportLeft -> {
-                        var idx = firstVisibleIndex
-                        while (idx > 0) {
-                            val itemCenterEstimate = (idx - 1) * totalItemWidthPx + itemWidthPx / 2f
-                            if (dropXInContainer < itemCenterEstimate) {
-                                idx--
-                            } else {
-                                break
-                            }
-                        }
-                        idx
+                        val distanceLeft = viewportLeft - dropXInContainer
+                        val stepsBack = (distanceLeft / totalItemWidthPx).toInt() + 2
+                        (firstVisibleIndex - stepsBack).coerceAtLeast(0)
                     }
                     dropXInContainer > viewportRight -> {
-                        var idx = lastVisibleIndex + 1
-                        while (idx < pinnedPlans.size) {
-                            val itemCenterEstimate = idx * totalItemWidthPx + itemWidthPx / 2f
-                            if (dropXInContainer > itemCenterEstimate) {
-                                idx++
-                            } else {
-                                break
-                            }
-                        }
-                        idx
+                        val distanceRight = dropXInContainer - viewportRight
+                        val stepsForward = (distanceRight / totalItemWidthPx).toInt() + 2
+                        (lastVisibleIndex + stepsForward).coerceAtMost(pinnedPlans.size)
                     }
                     else -> {
                         var idx = -1
@@ -220,20 +209,23 @@ fun HomeScreen(
                     if (taskBarBounds != Rect.Zero) {
                         val viewportStartPx = taskBarBounds.left
                         val viewportEndPx = taskBarBounds.right
-                        val edgeZone = with(density) { 80.dp.toPx() }
-                        val maxScrollStep = with(density) { 8.dp.toPx() }
+                        val topBound = taskBarBounds.top - with(density) { 200.dp.toPx() }
+                        val bottomBound = taskBarBounds.bottom + with(density) { 200.dp.toPx() }
+                        val inYRange = dragPosition.y >= topBound && dragPosition.y <= bottomBound
+                        val edgeZone = with(density) { 120.dp.toPx() }
+                        val maxScrollStep = with(density) { 14.dp.toPx() }
 
-                        val shouldScrollLeft = dragPosition.x < viewportStartPx + edgeZone
-                        val shouldScrollRight = dragPosition.x > viewportEndPx - edgeZone
+                        val shouldScrollLeft = inYRange && dragPosition.x < viewportStartPx + edgeZone
+                        val shouldScrollRight = inYRange && dragPosition.x > viewportEndPx - edgeZone
 
                         if (shouldScrollLeft || shouldScrollRight) {
                             val distanceIntoZone = if (shouldScrollLeft) {
-                                viewportStartPx + edgeZone - dragPosition.x
+                                (viewportStartPx + edgeZone - dragPosition.x).coerceAtLeast(0f)
                             } else {
-                                dragPosition.x - (viewportEndPx - edgeZone)
+                                (dragPosition.x - (viewportEndPx - edgeZone)).coerceAtLeast(0f)
                             }
                             val speedFactor = (distanceIntoZone / edgeZone).coerceIn(0f, 1f)
-                            val actualStep = maxScrollStep * (0.4f + speedFactor * 0.6f)
+                            val actualStep = maxScrollStep * (0.3f + speedFactor * 0.7f)
 
                             taskBarListState.scroll {
                                 scrollBy(if (shouldScrollLeft) -actualStep else actualStep)
@@ -369,38 +361,44 @@ fun HomeScreen(
 
                         try {
                             do {
-                                val event: PointerEvent = awaitPointerEvent(PointerEventPass.Main)
-                                val change: PointerInputChange = event.changes.firstOrNull() ?: break
+                                val event: PointerEvent = awaitPointerEvent(PointerEventPass.Initial)
+                                val change: PointerInputChange = event.changes.firstOrNull { it.id.value == down.id.value }
+                                    ?: event.changes.firstOrNull()
+                                    ?: break
                                 currentPos = change.position
                                 val globalX = rootBoxTopLeft.x + currentPos.x
                                 val globalY = rootBoxTopLeft.y + currentPos.y
                                 val globalPos = Offset(globalX, globalY)
 
-                                val dx = change.positionChange().x
-                                val dy = change.positionChange().y
-                                if (abs(dx) > touchSlop || abs(dy) > touchSlop) {
-                                    hasMoved = true
-                                    if (!longPressTriggered) {
-                                        longPressJob.cancel()
-                                    }
-                                }
-
                                 if (longPressTriggered && draggingPlanId != null) {
                                     change.consume()
                                     dragPosition = globalPos
                                     isDragOver = isDragOverTaskBar()
+                                } else {
+                                    val dx = change.positionChange().x
+                                    val dy = change.positionChange().y
+                                    if (abs(dx) > touchSlop || abs(dy) > touchSlop) {
+                                        hasMoved = true
+                                        longPressJob.cancel()
+                                    }
                                 }
                             } while (!event.changes.all { it.changedToUp() })
 
-                            if (!longPressTriggered) {
-                                longPressJob.cancel()
-                            }
+                            longPressJob.cancel()
 
                             if (longPressTriggered && draggingPlanId != null) {
                                 handleTaskBarDragEnd()
                             }
-                        } finally {
+                        } catch (ce: androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException) {
                             longPressJob.cancel()
+                            if (longPressTriggered && draggingPlanId != null) {
+                                handleTaskBarDragEnd()
+                            }
+                        } catch (t: Throwable) {
+                            longPressJob.cancel()
+                            if (longPressTriggered && draggingPlanId != null) {
+                                handleTaskBarDragEnd()
+                            }
                         }
                     }
                 }
