@@ -5,6 +5,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.EaseOutBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,6 +40,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
@@ -127,6 +132,9 @@ fun HomeScreen(
     var taskBarBounds by remember { mutableStateOf(Rect.Zero) }
     var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
 
+    var showCompletedPlans by remember { mutableStateOf(true) }
+    var showFilterMenu by remember { mutableStateOf(false) }
+
     val taskBarListState = rememberLazyListState()
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
@@ -135,6 +143,24 @@ fun HomeScreen(
 
     fun updatePinnedItemBounds(planId: Long, bounds: Rect) {
         pinnedItemBounds[planId] = bounds
+    }
+
+    val activePlans by remember {
+        derivedStateOf {
+            plans.filter { plan ->
+                val (total, completed) = progressMap[plan.id] ?: (0 to 0)
+                total == 0 || completed < total
+            }
+        }
+    }
+
+    val completedPlans by remember {
+        derivedStateOf {
+            plans.filter { plan ->
+                val (total, completed) = progressMap[plan.id] ?: (0 to 0)
+                total > 0 && completed >= total
+            }
+        }
     }
 
     val itemWidthPx = with(density) { 150.dp.toPx() }
@@ -310,6 +336,41 @@ fun HomeScreen(
                         "摄影策划",
                         style = MaterialTheme.typography.headlineSmall
                     )
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showFilterMenu = true }) {
+                            Icon(
+                                Icons.Filled.FilterList,
+                                contentDescription = "筛选",
+                                tint = Gray500
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showFilterMenu,
+                            onDismissRequest = { showFilterMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = if (showCompletedPlans)
+                                                Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                            contentDescription = null,
+                                            tint = Green500,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text("显示已完成策划")
+                                    }
+                                },
+                                onClick = {
+                                    showCompletedPlans = !showCompletedPlans
+                                    showFilterMenu = false
+                                }
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -528,7 +589,8 @@ fun HomeScreen(
                     }
                 }
 
-                if (plans.isEmpty()) {
+                val isAnyPlanVisible = activePlans.isNotEmpty() || (showCompletedPlans && completedPlans.isNotEmpty())
+                if (plans.isEmpty() || !isAnyPlanVisible) {
                     EmptyState(modifier = Modifier.weight(1f))
                 } else {
                     LazyColumn(
@@ -539,44 +601,106 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         item { Spacer(modifier = Modifier.height(4.dp)) }
-                        items(plans, key = { it.id }) { plan ->
-                            val (total, completed) = progressMap[plan.id] ?: (0 to 0)
-                            val isThisDragging = draggingPlanId == plan.id
-                            PlanCard(
-                                plan = plan,
-                                totalCount = total,
-                                completedCount = completed,
-                                onClick = { onNavigateToDetail(plan.id) },
-                                onEdit = { onNavigateToEdit(plan.id) },
-                                onDelete = { viewModel.deletePlan(plan.id) },
-                                onPin = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    if (plan.isPinned) viewModel.unpinPlan(plan.id)
-                                    else viewModel.pinPlan(plan.id)
-                                },
-                                onDragStart = { globalPosition ->
-                                    draggingPlanId = plan.id
-                                    dragPosition = globalPosition
-                                    isDragOver = isDragOverTaskBar()
-                                    isDraggingFromTaskBar = false
-                                },
-                                onDrag = { globalPosition ->
-                                    dragPosition = globalPosition
-                                    isDragOver = isDragOverTaskBar()
-                                },
-                                onDragEnd = {
-                                    if (isDragOver && draggingPlanId != null && !plan.isPinned) {
+
+                        if (activePlans.isNotEmpty()) {
+                            item {
+                                PlanSectionHeader(
+                                    title = "进行中",
+                                    count = activePlans.size,
+                                    isCompleted = false
+                                )
+                            }
+                            items(activePlans, key = { it.id }) { plan ->
+                                val (total, completed) = progressMap[plan.id] ?: (0 to 0)
+                                val isThisDragging = draggingPlanId == plan.id
+                                PlanCard(
+                                    plan = plan,
+                                    totalCount = total,
+                                    completedCount = completed,
+                                    onClick = { onNavigateToDetail(plan.id) },
+                                    onEdit = { onNavigateToEdit(plan.id) },
+                                    onDelete = { viewModel.deletePlan(plan.id) },
+                                    onPin = {
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        viewModel.pinPlan(draggingPlanId!!)
-                                    }
-                                    draggingPlanId = null
-                                    isDraggingFromTaskBar = false
-                                    isDragOver = false
-                                    dragPosition = Offset.Zero
-                                },
-                                isDragging = isThisDragging
-                            )
+                                        if (plan.isPinned) viewModel.unpinPlan(plan.id)
+                                        else viewModel.pinPlan(plan.id)
+                                    },
+                                    onDragStart = { globalPosition ->
+                                        draggingPlanId = plan.id
+                                        dragPosition = globalPosition
+                                        isDragOver = isDragOverTaskBar()
+                                        isDraggingFromTaskBar = false
+                                    },
+                                    onDrag = { globalPosition ->
+                                        dragPosition = globalPosition
+                                        isDragOver = isDragOverTaskBar()
+                                    },
+                                    onDragEnd = {
+                                        if (isDragOver && draggingPlanId != null && !plan.isPinned) {
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.pinPlan(draggingPlanId!!)
+                                        }
+                                        draggingPlanId = null
+                                        isDraggingFromTaskBar = false
+                                        isDragOver = false
+                                        dragPosition = Offset.Zero
+                                    },
+                                    isDragging = isThisDragging
+                                )
+                            }
                         }
+
+                        if (showCompletedPlans && completedPlans.isNotEmpty()) {
+                            if (activePlans.isNotEmpty()) {
+                                item { Spacer(modifier = Modifier.height(8.dp)) }
+                            }
+                            item {
+                                PlanSectionHeader(
+                                    title = "已完成",
+                                    count = completedPlans.size,
+                                    isCompleted = true
+                                )
+                            }
+                            items(completedPlans, key = { it.id }) { plan ->
+                                val (total, completed) = progressMap[plan.id] ?: (0 to 0)
+                                val isThisDragging = draggingPlanId == plan.id
+                                PlanCard(
+                                    plan = plan,
+                                    totalCount = total,
+                                    completedCount = completed,
+                                    onClick = { onNavigateToDetail(plan.id) },
+                                    onEdit = { onNavigateToEdit(plan.id) },
+                                    onDelete = { viewModel.deletePlan(plan.id) },
+                                    onPin = {
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        if (plan.isPinned) viewModel.unpinPlan(plan.id)
+                                        else viewModel.pinPlan(plan.id)
+                                    },
+                                    onDragStart = { globalPosition ->
+                                        draggingPlanId = plan.id
+                                        dragPosition = globalPosition
+                                        isDragOver = isDragOverTaskBar()
+                                        isDraggingFromTaskBar = false
+                                    },
+                                    onDrag = { globalPosition ->
+                                        dragPosition = globalPosition
+                                        isDragOver = isDragOverTaskBar()
+                                    },
+                                    onDragEnd = {
+                                        if (isDragOver && draggingPlanId != null && !plan.isPinned) {
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.pinPlan(draggingPlanId!!)
+                                        }
+                                        draggingPlanId = null
+                                        isDraggingFromTaskBar = false
+                                        isDragOver = false
+                                        dragPosition = Offset.Zero
+                                    },
+                                    isDragging = isThisDragging
+                                )
+                            }
+                        }
+
                         item { Spacer(modifier = Modifier.height(80.dp)) }
                     }
                 }
@@ -834,6 +958,42 @@ private fun PinnedPlanItem(
 }
 
 @Composable
+private fun PlanSectionHeader(
+    title: String,
+    count: Int,
+    isCompleted: Boolean
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = if (isCompleted) Gray500 else MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "($count)",
+            style = MaterialTheme.typography.bodySmall,
+            color = Gray500
+        )
+        if (isCompleted) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .height(1.dp)
+                    .weight(1f)
+                    .background(Gray300)
+            )
+        }
+    }
+}
+
+@Composable
 private fun EmptyState(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier.fillMaxSize(),
@@ -879,6 +1039,7 @@ private fun PlanCard(
     var showMenu by remember { mutableStateOf(false) }
     val dateFormatter = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
     val progress = if (totalCount > 0) completedCount.toFloat() / totalCount else 0f
+    val isCompleted = totalCount > 0 && completedCount >= totalCount
     val progressColor by animateColorAsState(
         targetValue = if (progress >= 1f) Green700 else Green500,
         label = "progressColor"
@@ -889,6 +1050,32 @@ private fun PlanCard(
 
     var cardTopLeft by remember { mutableStateOf(Offset.Zero) }
 
+    val alphaAnim = remember { Animatable(1f) }
+    val scaleAnim = remember { Animatable(1f) }
+    val translationYAnim = remember { Animatable(0f) }
+
+    LaunchedEffect(isDragging) {
+        if (isDragging) {
+            alphaAnim.snapTo(0.3f)
+            scaleAnim.snapTo(0.95f)
+            translationYAnim.snapTo(dragTranslationY)
+        } else {
+            val animSpec = tween<Float>(
+                durationMillis = 280,
+                easing = EaseOutBack
+            )
+            launch { alphaAnim.animateTo(1f, animSpec) }
+            launch { scaleAnim.animateTo(1f, animSpec) }
+            launch { translationYAnim.animateTo(0f, animSpec) }
+        }
+    }
+
+    val cardBgColor by animateColorAsState(
+        targetValue = if (isCompleted) Green100.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
+        label = "cardBgColor",
+        animationSpec = tween(durationMillis = 200)
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -896,11 +1083,18 @@ private fun PlanCard(
                 cardTopLeft = layoutCoordinates.boundsInRoot().topLeft
             }
             .graphicsLayer {
-                alpha = if (isDragging) 0.3f else 1f
-                scaleX = if (isDragging) 0.95f else 1f
-                scaleY = if (isDragging) 0.95f else 1f
-                translationY = if (isDragging) dragTranslationY else 0f
+                alpha = alphaAnim.value
+                scaleX = scaleAnim.value
+                scaleY = scaleAnim.value
+                translationY = translationYAnim.value
             }
+            .then(
+                if (isCompleted) Modifier.border(
+                    1.5.dp,
+                    Green500.copy(alpha = 0.4f),
+                    RoundedCornerShape(12.dp)
+                ) else Modifier
+            )
             .clickable(onClick = onClick)
             .pointerInput(Unit) {
                 detectDragGesturesAfterLongPress(
@@ -920,8 +1114,8 @@ private fun PlanCard(
                 )
             },
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isCompleted) 1.dp else 2.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBgColor)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -946,13 +1140,40 @@ private fun PlanCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        if (isCompleted) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = "已完成",
+                                modifier = Modifier.size(18.dp),
+                                tint = Green700
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = dateFormatter.format(Date(plan.createdAt)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Gray500
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = dateFormatter.format(Date(plan.createdAt)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Gray500
+                        )
+                        if (isCompleted) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Green500)
+                                    .padding(horizontal = 6.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "已完成",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = White,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Box {
@@ -1010,7 +1231,8 @@ private fun PlanCard(
                     Text(
                         text = "$completedCount/$totalCount",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Gray700,
+                        color = if (isCompleted) Green700 else Gray700,
+                        fontWeight = if (isCompleted) androidx.compose.ui.text.font.FontWeight.Bold else androidx.compose.ui.text.font.FontWeight.Normal,
                         fontSize = 13.sp
                     )
                 }
