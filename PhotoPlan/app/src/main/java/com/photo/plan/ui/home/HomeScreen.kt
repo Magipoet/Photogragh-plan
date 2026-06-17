@@ -840,44 +840,66 @@ private fun PinnedPlanItem(
 
     val shiftAnim = remember { Animatable(0f) }
     val alphaAnim = remember { Animatable(1f) }
+    val scaleAnim = remember { Animatable(1f) }
 
-    LaunchedEffect(isDragActive, shiftOffsetPx) {
+    LaunchedEffect(isDragActive, shiftOffsetPx, isDragging, dimmed) {
         if (!isDragActive) {
             shiftAnim.snapTo(0f)
             alphaAnim.snapTo(1f)
+            scaleAnim.snapTo(1f)
         } else {
-            shiftAnim.animateTo(
-                targetValue = shiftOffsetPx,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
+            val shiftJob = launch {
+                shiftAnim.animateTo(
+                    targetValue = shiftOffsetPx,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
                 )
-            )
+            }
             val targetAlpha = when {
                 isDragging -> 0f
                 dimmed -> 0.45f
                 else -> 1f
             }
-            alphaAnim.animateTo(
-                targetValue = targetAlpha,
-                animationSpec = tween(durationMillis = 180)
-            )
+            val alphaJob = launch {
+                alphaAnim.animateTo(
+                    targetValue = targetAlpha,
+                    animationSpec = tween(durationMillis = 180)
+                )
+            }
+            val targetScale = if (isDragging) 0.92f else 1f
+            val scaleJob = launch {
+                scaleAnim.animateTo(
+                    targetValue = targetScale,
+                    animationSpec = tween(durationMillis = 150)
+                )
+            }
+            shiftJob.join()
+            alphaJob.join()
+            scaleJob.join()
         }
     }
 
+    val safeTranslationX = if (isDragActive) shiftAnim.value else 0f
+    val safeAlpha = if (isDragActive) alphaAnim.value else 1f
+    val safeScale = if (isDragActive) scaleAnim.value else 1f
+
+    val targetBgColor = if (highlighted && isDragActive)
+        Green500.copy(alpha = 0.08f)
+    else
+        MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
+    val targetBorderColor = if (highlighted && isDragActive)
+        Green500.copy(alpha = 0.5f)
+    else
+        Color.Transparent
     val bgColor by animateColorAsState(
-        targetValue = if (highlighted)
-            Green500.copy(alpha = 0.08f)
-        else
-            MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp),
+        targetValue = targetBgColor,
         animationSpec = tween(durationMillis = 150),
         label = "pinnedCardBg"
     )
     val borderColor by animateColorAsState(
-        targetValue = if (highlighted)
-            Green500.copy(alpha = 0.5f)
-        else
-            Color.Transparent,
+        targetValue = targetBorderColor,
         animationSpec = tween(durationMillis = 150),
         label = "pinnedCardBorder"
     )
@@ -890,13 +912,13 @@ private fun PinnedPlanItem(
                 onGloballyPositioned(layoutCoordinates.boundsInRoot())
             }
             .graphicsLayer {
-                translationX = shiftAnim.value
-                alpha = alphaAnim.value
-                scaleX = 1f
-                scaleY = 1f
+                translationX = safeTranslationX
+                alpha = safeAlpha
+                scaleX = safeScale
+                scaleY = safeScale
             }
             .then(
-                if (highlighted) Modifier.border(
+                if (highlighted && isDragActive) Modifier.border(
                     width = 2.dp,
                     color = borderColor,
                     shape = RoundedCornerShape(8.dp)
