@@ -299,7 +299,7 @@ fun HomeScreen(
     fun handleTaskBarDragEnd() {
         val finalDraggingPlanId = draggingPlanId
         val finalInsertIndex = targetInsertIndex
-        val finalIsDragOver = isDragOver
+        val finalIsDragOver = isDragOverTaskBar()
         val currentPinnedPlans = pinnedPlans
 
         draggingPlanId = null
@@ -309,7 +309,6 @@ fun HomeScreen(
         isUserScrollEnabled = true
 
         scope.launch {
-            delay(50)
             if (finalIsDragOver && finalDraggingPlanId != null && finalInsertIndex >= 0) {
                 val otherPinnedPlans = currentPinnedPlans.filter { it.id != finalDraggingPlanId }
                 val draggedPlan = currentPinnedPlans.find { it.id == finalDraggingPlanId }
@@ -320,8 +319,7 @@ fun HomeScreen(
                     newOrder.add(insertIndex, draggedPlan)
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.reorderPinnedPlans(newOrder.map { it.id })
-                    delay(30)
-                    taskBarListState.scrollToItem(insertIndex, 0)
+                    taskBarListState.scrollToItem(insertIndex.coerceAtLeast(0), 0)
                 }
             } else if (finalDraggingPlanId != null) {
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -843,25 +841,28 @@ private fun PinnedPlanItem(
     val shiftAnim = remember { Animatable(0f) }
     val alphaAnim = remember { Animatable(1f) }
 
-    LaunchedEffect(shiftOffsetPx) {
-        shiftAnim.animateTo(
-            targetValue = shiftOffsetPx,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow
+    LaunchedEffect(isDragActive, shiftOffsetPx) {
+        if (!isDragActive) {
+            shiftAnim.snapTo(0f)
+            alphaAnim.snapTo(1f)
+        } else {
+            shiftAnim.animateTo(
+                targetValue = shiftOffsetPx,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
             )
-        )
-    }
-    val targetAlpha = when {
-        isDragging -> 0f
-        dimmed -> 0.45f
-        else -> 1f
-    }
-    LaunchedEffect(targetAlpha) {
-        alphaAnim.animateTo(
-            targetValue = targetAlpha,
-            animationSpec = tween(durationMillis = 180)
-        )
+            val targetAlpha = when {
+                isDragging -> 0f
+                dimmed -> 0.45f
+                else -> 1f
+            }
+            alphaAnim.animateTo(
+                targetValue = targetAlpha,
+                animationSpec = tween(durationMillis = 180)
+            )
+        }
     }
 
     val bgColor by animateColorAsState(
