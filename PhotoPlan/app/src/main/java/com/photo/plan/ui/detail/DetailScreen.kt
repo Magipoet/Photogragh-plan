@@ -618,7 +618,7 @@ private fun SampleGridCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(8.dp),
-                contentAlignment = if (sample.isCompleted) Alignment.BottomEnd else Alignment.TopEnd
+                contentAlignment = Alignment.TopEnd
             ) {
                 val btnColor = if (sample.isCompleted) Gray500 else Green500
                 Box(

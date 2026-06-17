@@ -70,6 +70,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -884,6 +885,14 @@ private fun PinnedPlanItem(
     val safeTranslationX = if (isDragActive) shiftAnim.value else 0f
     val safeAlpha = if (isDragActive) alphaAnim.value else 1f
     val safeScale = if (isDragActive) scaleAnim.value else 1f
+
+    SideEffect {
+        if (!isDragActive) {
+            if (shiftAnim.value != 0f) shiftAnim.snapTo(0f)
+            if (alphaAnim.value != 1f) alphaAnim.snapTo(1f)
+            if (scaleAnim.value != 1f) scaleAnim.snapTo(1f)
+        }
+    }
 
     val targetBgColor = if (highlighted && isDragActive)
         Green500.copy(alpha = 0.08f)
