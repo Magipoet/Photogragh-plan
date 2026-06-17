@@ -98,8 +98,10 @@ import com.photo.plan.data.local.entity.PlanEntity
 import com.photo.plan.ui.theme.Gray300
 import com.photo.plan.ui.theme.Gray500
 import com.photo.plan.ui.theme.Gray700
+import com.photo.plan.ui.theme.Green100
 import com.photo.plan.ui.theme.Green500
 import com.photo.plan.ui.theme.Green700
+import com.photo.plan.ui.theme.White
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
