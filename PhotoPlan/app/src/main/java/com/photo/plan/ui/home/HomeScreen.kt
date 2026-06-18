@@ -844,9 +844,13 @@ private fun PinnedPlanItem(
 
     LaunchedEffect(isDragActive, shiftOffsetPx, isDragging, dimmed) {
         if (!isDragActive) {
-            shiftAnim.snapTo(0f)
-            alphaAnim.snapTo(1f)
-            scaleAnim.snapTo(1f)
+            val resetAnimSpec = tween<Float>(
+                durationMillis = 220,
+                easing = FastOutSlowInEasing
+            )
+            launch { shiftAnim.animateTo(0f, resetAnimSpec) }
+            launch { alphaAnim.animateTo(1f, resetAnimSpec) }
+            launch { scaleAnim.animateTo(1f, resetAnimSpec) }
         } else {
             val shiftJob = launch {
                 shiftAnim.animateTo(
@@ -881,14 +885,6 @@ private fun PinnedPlanItem(
         }
     }
 
-    LaunchedEffect(isDragActive) {
-        if (!isDragActive) {
-            shiftAnim.snapTo(0f)
-            alphaAnim.snapTo(1f)
-            scaleAnim.snapTo(1f)
-        }
-    }
-
     val targetBgColor = if (highlighted && isDragActive && !isDragging)
         Green500.copy(alpha = 0.08f)
     else
@@ -916,26 +912,10 @@ private fun PinnedPlanItem(
                 onGloballyPositioned(layoutCoordinates.boundsInRoot())
             }
             .graphicsLayer {
-                translationX = when {
-                    isDragging -> 0f
-                    !isDragActive -> 0f
-                    else -> shiftAnim.value
-                }
-                alpha = when {
-                    isDragging -> 0f
-                    !isDragActive -> 1f
-                    else -> alphaAnim.value
-                }
-                scaleX = when {
-                    isDragging -> 0.92f
-                    !isDragActive -> 1f
-                    else -> scaleAnim.value
-                }
-                scaleY = when {
-                    isDragging -> 0.92f
-                    !isDragActive -> 1f
-                    else -> scaleAnim.value
-                }
+                translationX = shiftAnim.value
+                alpha = alphaAnim.value
+                scaleX = scaleAnim.value
+                scaleY = scaleAnim.value
             }
             .then(
                 if (highlighted && isDragActive && !isDragging) Modifier.border(
