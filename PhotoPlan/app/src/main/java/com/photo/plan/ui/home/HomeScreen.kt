@@ -889,15 +889,11 @@ private fun PinnedPlanItem(
         }
     }
 
-    val safeTranslationX = if (isDragActive) shiftAnim.value else 0f
-    val safeAlpha = if (isDragActive) alphaAnim.value else 1f
-    val safeScale = if (isDragActive) scaleAnim.value else 1f
-
-    val targetBgColor = if (highlighted && isDragActive)
+    val targetBgColor = if (highlighted && isDragActive && !isDragging)
         Green500.copy(alpha = 0.08f)
     else
         MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
-    val targetBorderColor = if (highlighted && isDragActive)
+    val targetBorderColor = if (highlighted && isDragActive && !isDragging)
         Green500.copy(alpha = 0.5f)
     else
         Color.Transparent
@@ -920,13 +916,29 @@ private fun PinnedPlanItem(
                 onGloballyPositioned(layoutCoordinates.boundsInRoot())
             }
             .graphicsLayer {
-                translationX = safeTranslationX
-                alpha = safeAlpha
-                scaleX = safeScale
-                scaleY = safeScale
+                translationX = when {
+                    isDragging -> 0f
+                    !isDragActive -> 0f
+                    else -> shiftAnim.value
+                }
+                alpha = when {
+                    isDragging -> 0f
+                    !isDragActive -> 1f
+                    else -> alphaAnim.value
+                }
+                scaleX = when {
+                    isDragging -> 0.92f
+                    !isDragActive -> 1f
+                    else -> scaleAnim.value
+                }
+                scaleY = when {
+                    isDragging -> 0.92f
+                    !isDragActive -> 1f
+                    else -> scaleAnim.value
+                }
             }
             .then(
-                if (highlighted && isDragActive) Modifier.border(
+                if (highlighted && isDragActive && !isDragging) Modifier.border(
                     width = 2.dp,
                     color = borderColor,
                     shape = RoundedCornerShape(8.dp)
