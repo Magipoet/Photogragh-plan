@@ -138,6 +138,7 @@ fun HomeScreen(
     var showCompletedPlans by remember { mutableStateOf(true) }
     var showFilterMenu by remember { mutableStateOf(false) }
     var pendingScrollToPlanId by remember { mutableStateOf<Long?>(null) }
+    var dragEndPositionInfo by remember { mutableStateOf<Pair<Int, Float>?>(null) }
 
     val taskBarListState = rememberLazyListState()
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
@@ -266,6 +267,21 @@ fun HomeScreen(
     }
 
     LaunchedEffect(pinnedPlans) {
+        val posInfo = dragEndPositionInfo
+        if (posInfo != null) {
+            dragEndPositionInfo = null
+            val (targetIndex, previewLeftInTaskbar) = posInfo
+            if (targetIndex >= 0 && targetIndex < pinnedPlans.size) {
+                try {
+                    taskBarListState.scrollToItem(
+                        index = targetIndex,
+                        scrollOffset = -previewLeftInTaskbar.toInt()
+                    )
+                } catch (_: Exception) {}
+            }
+            return@LaunchedEffect
+        }
+
         val targetId = pendingScrollToPlanId
         if (targetId != null) {
             val targetIndex = pinnedPlans.indexOfFirst { it.id == targetId }
@@ -327,6 +343,9 @@ fun HomeScreen(
                         val targetIdx = if (finalInsertIndex >= 0) finalInsertIndex else draggedIdx
                         val insertIndex = targetIdx.coerceIn(0, otherPinnedPlans.size)
                         if (insertIndex != draggedIdx) {
+                            val previewWidthPx = with(density) { 150.dp.toPx() }
+                            val previewLeftInTaskbar = dragPosition.x - previewWidthPx / 2 - taskBarBounds.left
+                            dragEndPositionInfo = Pair(insertIndex, previewLeftInTaskbar)
                             val newOrder = otherPinnedPlans.toMutableList()
                             newOrder.add(insertIndex, draggedPlan)
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
