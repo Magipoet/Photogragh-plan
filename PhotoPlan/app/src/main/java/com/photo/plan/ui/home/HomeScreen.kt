@@ -265,18 +265,17 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(pinnedPlans, pendingScrollToPlanId) {
+    LaunchedEffect(pinnedPlans) {
         val targetId = pendingScrollToPlanId
         if (targetId != null) {
             val targetIndex = pinnedPlans.indexOfFirst { it.id == targetId }
             if (targetIndex >= 0) {
                 pendingScrollToPlanId = null
                 delay(80)
-                val cardPaddingPx = with(density) { 12.dp.toPx() }
                 try {
                     taskBarListState.animateScrollToItem(
                         index = targetIndex.coerceAtLeast(0),
-                        scrollOffset = -cardPaddingPx.toInt()
+                        scrollOffset = 0
                     )
                 } catch (_: Exception) {}
             }
