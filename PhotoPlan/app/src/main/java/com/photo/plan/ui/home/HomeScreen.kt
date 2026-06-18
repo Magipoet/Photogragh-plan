@@ -137,6 +137,7 @@ fun HomeScreen(
 
     var showCompletedPlans by remember { mutableStateOf(true) }
     var showFilterMenu by remember { mutableStateOf(false) }
+    var pendingScrollToPlanId by remember { mutableStateOf<Long?>(null) }
 
     val taskBarListState = rememberLazyListState()
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
@@ -264,6 +265,24 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(pinnedPlans, pendingScrollToPlanId) {
+        val targetId = pendingScrollToPlanId
+        if (targetId != null) {
+            val targetIndex = pinnedPlans.indexOfFirst { it.id == targetId }
+            if (targetIndex >= 0) {
+                pendingScrollToPlanId = null
+                delay(80)
+                val cardPaddingPx = with(density) { 12.dp.toPx() }
+                try {
+                    taskBarListState.animateScrollToItem(
+                        index = targetIndex.coerceAtLeast(0),
+                        scrollOffset = -cardPaddingPx.toInt()
+                    )
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     fun isDragOverTaskBar(): Boolean {
         if (draggingPlanId == null) return false
         val previewWidthPx = with(density) { 150.dp.toPx() }
@@ -312,6 +331,7 @@ fun HomeScreen(
                             val newOrder = otherPinnedPlans.toMutableList()
                             newOrder.add(insertIndex, draggedPlan)
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            pendingScrollToPlanId = finalDraggingPlanId
                             viewModel.reorderPinnedPlans(newOrder.map { it.id })
                         }
                     }
@@ -562,7 +582,10 @@ fun HomeScreen(
                                     onPin = {
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                         if (plan.isPinned) viewModel.unpinPlan(plan.id)
-                                        else viewModel.pinPlan(plan.id)
+                                        else {
+                                            pendingScrollToPlanId = plan.id
+                                            viewModel.pinPlan(plan.id)
+                                        }
                                     },
                                     onDragStart = { globalPosition ->
                                         draggingPlanId = plan.id
@@ -577,6 +600,7 @@ fun HomeScreen(
                                     onDragEnd = {
                                         if (isDragOver && draggingPlanId != null && !plan.isPinned) {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            pendingScrollToPlanId = draggingPlanId
                                             viewModel.pinPlan(draggingPlanId!!)
                                         }
                                         draggingPlanId = null
@@ -613,7 +637,10 @@ fun HomeScreen(
                                     onPin = {
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                         if (plan.isPinned) viewModel.unpinPlan(plan.id)
-                                        else viewModel.pinPlan(plan.id)
+                                        else {
+                                            pendingScrollToPlanId = plan.id
+                                            viewModel.pinPlan(plan.id)
+                                        }
                                     },
                                     onDragStart = { globalPosition ->
                                         draggingPlanId = plan.id
@@ -628,6 +655,7 @@ fun HomeScreen(
                                     onDragEnd = {
                                         if (isDragOver && draggingPlanId != null && !plan.isPinned) {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            pendingScrollToPlanId = draggingPlanId
                                             viewModel.pinPlan(draggingPlanId!!)
                                         }
                                         draggingPlanId = null
