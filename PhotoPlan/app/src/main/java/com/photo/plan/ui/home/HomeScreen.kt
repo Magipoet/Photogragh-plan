@@ -272,7 +272,7 @@ fun HomeScreen(
 
     fun isDragOverTaskBar(): Boolean {
         if (draggingPlanId == null) return false
-        val previewWidthPx = with(density) { 200.dp.toPx() }
+        val previewWidthPx = with(density) { 150.dp.toPx() }
         val previewHeightPx = with(density) { 70.dp.toPx() }
         val previewLeft = dragPosition.x - previewWidthPx / 2
         val previewRight = dragPosition.x + previewWidthPx / 2
@@ -303,6 +303,8 @@ fun HomeScreen(
         val finalIsDragOver = isDragOverTaskBar()
         val currentPinnedPlans = pinnedPlans
 
+        val wasDraggingFromTaskBar = isDraggingFromTaskBar
+
         draggingPlanId = null
         isDraggingFromTaskBar = false
         isDragOver = false
@@ -316,21 +318,26 @@ fun HomeScreen(
         }
 
         scope.launch {
-            if (finalIsDragOver && finalDraggingPlanId != null && finalInsertIndex >= 0) {
-                val otherPinnedPlans = currentPinnedPlans.filter { it.id != finalDraggingPlanId }
-                val draggedPlan = currentPinnedPlans.find { it.id == finalDraggingPlanId }
-                val draggedIdx = draggedPlan?.let { currentPinnedPlans.indexOf(it) } ?: -1
-                if (draggedPlan != null && finalInsertIndex != draggedIdx) {
-                    val newOrder = otherPinnedPlans.toMutableList()
-                    val insertIndex = finalInsertIndex.coerceIn(0, newOrder.size)
-                    newOrder.add(insertIndex, draggedPlan)
+            if (wasDraggingFromTaskBar && finalDraggingPlanId != null) {
+                if (finalIsDragOver) {
+                    val draggedPlan = currentPinnedPlans.find { it.id == finalDraggingPlanId }
+                    val draggedIdx = draggedPlan?.let { currentPinnedPlans.indexOf(it) } ?: -1
+                    if (draggedPlan != null && currentPinnedPlans.size > 1) {
+                        val otherPinnedPlans = currentPinnedPlans.filter { it.id != finalDraggingPlanId }
+                        val targetIdx = if (finalInsertIndex >= 0) finalInsertIndex else draggedIdx
+                        val insertIndex = targetIdx.coerceIn(0, otherPinnedPlans.size)
+                        if (insertIndex != draggedIdx) {
+                            val newOrder = otherPinnedPlans.toMutableList()
+                            newOrder.add(insertIndex, draggedPlan)
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.reorderPinnedPlans(newOrder.map { it.id })
+                            taskBarListState.scrollToItem(insertIndex.coerceAtLeast(0), 0)
+                        }
+                    }
+                } else {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.reorderPinnedPlans(newOrder.map { it.id })
-                    taskBarListState.scrollToItem(insertIndex.coerceAtLeast(0), 0)
+                    viewModel.unpinPlan(finalDraggingPlanId)
                 }
-            } else if (finalDraggingPlanId != null) {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                viewModel.unpinPlan(finalDraggingPlanId)
             }
         }
     }
@@ -846,37 +853,28 @@ private fun PinnedPlanItem(
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val pinnedShiftAnim = remember(
-        key1 = plan.id,
-        key2 = isDragActive,
-        key3 = isDragging
-    ) { Animatable(0f) }
-    val pinnedAlphaAnim = remember(
-        key1 = plan.id,
-        key2 = isDragActive,
-        key3 = isDragging
-    ) { Animatable(1f) }
-    val pinnedScaleAnim = remember(
-        key1 = plan.id,
-        key2 = isDragActive,
-        key3 = isDragging
-    ) { Animatable(1f) }
+    val pinnedShiftAnim = remember(plan.id) { Animatable(0f) }
+    val pinnedAlphaAnim = remember(plan.id) { Animatable(1f) }
+    val pinnedScaleAnim = remember(plan.id) { Animatable(1f) }
 
     LaunchedEffect(isDragActive, shiftOffsetPx, isDragging, dimmed) {
         if (isDragActive) {
+            val targetShiftVal = shiftOffsetPx
+            val targetAlphaVal = when {
+                isDragging -> 0f
+                dimmed -> 0.45f
+                else -> 1f
+            }
+            val targetScaleVal = if (isDragging) 0.92f else 1f
+
             val shiftJob = launch {
                 pinnedShiftAnim.animateTo(
-                    targetValue = shiftOffsetPx,
+                    targetValue = targetShiftVal,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow
                     )
                 )
-            }
-            val targetAlphaVal = when {
-                isDragging -> 0f
-                dimmed -> 0.45f
-                else -> 1f
             }
             val alphaJob = launch {
                 pinnedAlphaAnim.animateTo(
@@ -884,7 +882,6 @@ private fun PinnedPlanItem(
                     animationSpec = tween(durationMillis = 180)
                 )
             }
-            val targetScaleVal = if (isDragging) 0.92f else 1f
             val scaleJob = launch {
                 pinnedScaleAnim.animateTo(
                     targetValue = targetScaleVal,
@@ -895,9 +892,13 @@ private fun PinnedPlanItem(
             alphaJob.join()
             scaleJob.join()
         } else {
-            pinnedShiftAnim.snapTo(0f)
-            pinnedAlphaAnim.snapTo(1f)
-            pinnedScaleAnim.snapTo(1f)
+            val resetAnimSpec = tween<Float>(durationMillis = 200)
+            val shiftJob = launch { pinnedShiftAnim.animateTo(0f, resetAnimSpec) }
+            val alphaJob = launch { pinnedAlphaAnim.animateTo(1f, resetAnimSpec) }
+            val scaleJob = launch { pinnedScaleAnim.animateTo(1f, resetAnimSpec) }
+            shiftJob.join()
+            alphaJob.join()
+            scaleJob.join()
         }
     }
 
@@ -928,10 +929,10 @@ private fun PinnedPlanItem(
                 onGloballyPositioned(layoutCoordinates.boundsInRoot())
             }
             .graphicsLayer {
-                translationX = if (!isDragActive) 0f else pinnedShiftAnim.value
-                alpha = if (!isDragActive) 1f else pinnedAlphaAnim.value
-                scaleX = if (!isDragActive) 1f else pinnedScaleAnim.value
-                scaleY = if (!isDragActive) 1f else pinnedScaleAnim.value
+                translationX = pinnedShiftAnim.value
+                alpha = pinnedAlphaAnim.value
+                scaleX = pinnedScaleAnim.value
+                scaleY = pinnedScaleAnim.value
             }
             .then(
                 if (highlighted && isDragActive && !isDragging) Modifier.border(
