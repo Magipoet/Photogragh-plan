@@ -1,8 +1,6 @@
 package com.photo.plan.ui.home
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -848,33 +846,60 @@ private fun PinnedPlanItem(
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val targetTranslationX = if (isDragActive) shiftOffsetPx else 0f
-    val targetAlpha = when {
-        !isDragActive -> 1f
-        isDragging -> 0f
-        dimmed -> 0.45f
-        else -> 1f
-    }
-    val targetScale = if (isDragActive && isDragging) 0.92f else 1f
+    val pinnedShiftAnim = remember(
+        key1 = plan.id,
+        key2 = isDragActive,
+        key3 = isDragging
+    ) { Animatable(0f) }
+    val pinnedAlphaAnim = remember(
+        key1 = plan.id,
+        key2 = isDragActive,
+        key3 = isDragging
+    ) { Animatable(1f) }
+    val pinnedScaleAnim = remember(
+        key1 = plan.id,
+        key2 = isDragActive,
+        key3 = isDragging
+    ) { Animatable(1f) }
 
-    val translationX by animateFloatAsState(
-        targetValue = targetTranslationX,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "pinnedTranslationX"
-    )
-    val alpha by animateFloatAsState(
-        targetValue = targetAlpha,
-        animationSpec = tween(durationMillis = 180),
-        label = "pinnedAlpha"
-    )
-    val scale by animateFloatAsState(
-        targetValue = targetScale,
-        animationSpec = tween(durationMillis = 150),
-        label = "pinnedScale"
-    )
+    LaunchedEffect(isDragActive, shiftOffsetPx, isDragging, dimmed) {
+        if (isDragActive) {
+            val shiftJob = launch {
+                pinnedShiftAnim.animateTo(
+                    targetValue = shiftOffsetPx,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                )
+            }
+            val targetAlphaVal = when {
+                isDragging -> 0f
+                dimmed -> 0.45f
+                else -> 1f
+            }
+            val alphaJob = launch {
+                pinnedAlphaAnim.animateTo(
+                    targetValue = targetAlphaVal,
+                    animationSpec = tween(durationMillis = 180)
+                )
+            }
+            val targetScaleVal = if (isDragging) 0.92f else 1f
+            val scaleJob = launch {
+                pinnedScaleAnim.animateTo(
+                    targetValue = targetScaleVal,
+                    animationSpec = tween(durationMillis = 150)
+                )
+            }
+            shiftJob.join()
+            alphaJob.join()
+            scaleJob.join()
+        } else {
+            pinnedShiftAnim.snapTo(0f)
+            pinnedAlphaAnim.snapTo(1f)
+            pinnedScaleAnim.snapTo(1f)
+        }
+    }
 
     val targetBgColor = if (highlighted && isDragActive && !isDragging)
         Green500.copy(alpha = 0.08f)
@@ -903,10 +928,10 @@ private fun PinnedPlanItem(
                 onGloballyPositioned(layoutCoordinates.boundsInRoot())
             }
             .graphicsLayer {
-                translationX = translationX
-                alpha = alpha
-                scaleX = scale
-                scaleY = scale
+                translationX = if (!isDragActive) 0f else pinnedShiftAnim.value
+                alpha = if (!isDragActive) 1f else pinnedAlphaAnim.value
+                scaleX = if (!isDragActive) 1f else pinnedScaleAnim.value
+                scaleY = if (!isDragActive) 1f else pinnedScaleAnim.value
             }
             .then(
                 if (highlighted && isDragActive && !isDragging) Modifier.border(
@@ -1066,25 +1091,34 @@ private fun PlanCard(
 
     var cardTopLeft by remember { mutableStateOf(Offset.Zero) }
 
-    val targetAlpha = if (isDragging) 0.3f else 1f
-    val targetScale = if (isDragging) 0.95f else 1f
-    val targetTranslationY = if (isDragging) dragTranslationY else 0f
+    val cardAlphaAnim = remember(
+        key1 = plan.id,
+        key2 = isDragging
+    ) { Animatable(1f) }
+    val cardScaleAnim = remember(
+        key1 = plan.id,
+        key2 = isDragging
+    ) { Animatable(1f) }
+    val cardTranslationYAnim = remember(
+        key1 = plan.id,
+        key2 = isDragging
+    ) { Animatable(0f) }
 
-    val cardAlpha by animateFloatAsState(
-        targetValue = targetAlpha,
-        animationSpec = tween(durationMillis = 280, easing = EaseOutBack),
-        label = "planCardAlpha"
-    )
-    val cardScale by animateFloatAsState(
-        targetValue = targetScale,
-        animationSpec = tween(durationMillis = 280, easing = EaseOutBack),
-        label = "planCardScale"
-    )
-    val cardTranslationY by animateFloatAsState(
-        targetValue = targetTranslationY,
-        animationSpec = tween(durationMillis = 280, easing = EaseOutBack),
-        label = "planCardTranslationY"
-    )
+    LaunchedEffect(isDragging, dragTranslationY) {
+        if (isDragging) {
+            cardAlphaAnim.snapTo(0.3f)
+            cardScaleAnim.snapTo(0.95f)
+            cardTranslationYAnim.snapTo(dragTranslationY)
+        } else {
+            val animSpec = tween<Float>(
+                durationMillis = 280,
+                easing = EaseOutBack
+            )
+            launch { cardAlphaAnim.animateTo(1f, animSpec) }
+            launch { cardScaleAnim.animateTo(1f, animSpec) }
+            launch { cardTranslationYAnim.animateTo(0f, animSpec) }
+        }
+    }
 
     val cardBgColor by animateColorAsState(
         targetValue = if (isCompleted) Green100.copy(alpha = 0.4f) else MaterialTheme.colorScheme.surface,
@@ -1099,10 +1133,10 @@ private fun PlanCard(
                 cardTopLeft = layoutCoordinates.boundsInRoot().topLeft
             }
             .graphicsLayer {
-                alpha = cardAlpha
-                scaleX = cardScale
-                scaleY = cardScale
-                translationY = cardTranslationY
+                alpha = if (!isDragging) 1f else cardAlphaAnim.value
+                scaleX = if (!isDragging) 1f else cardScaleAnim.value
+                scaleY = if (!isDragging) 1f else cardScaleAnim.value
+                translationY = if (!isDragging) 0f else cardTranslationYAnim.value
             }
             .then(
                 if (isCompleted) Modifier.border(
