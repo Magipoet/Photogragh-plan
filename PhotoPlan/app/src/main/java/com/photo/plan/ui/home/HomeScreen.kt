@@ -838,20 +838,12 @@ private fun PinnedPlanItem(
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val shiftAnim = remember { Animatable(0f) }
-    val alphaAnim = remember { Animatable(1f) }
-    val scaleAnim = remember { Animatable(1f) }
+    val shiftAnim = remember(key1 = isDragActive) { Animatable(0f) }
+    val alphaAnim = remember(key1 = isDragActive) { Animatable(1f) }
+    val scaleAnim = remember(key1 = isDragActive) { Animatable(1f) }
 
     LaunchedEffect(isDragActive, shiftOffsetPx, isDragging, dimmed) {
-        if (!isDragActive) {
-            val resetAnimSpec = tween<Float>(
-                durationMillis = 220,
-                easing = FastOutSlowInEasing
-            )
-            launch { shiftAnim.animateTo(0f, resetAnimSpec) }
-            launch { alphaAnim.animateTo(1f, resetAnimSpec) }
-            launch { scaleAnim.animateTo(1f, resetAnimSpec) }
-        } else {
+        if (isDragActive) {
             val shiftJob = launch {
                 shiftAnim.animateTo(
                     targetValue = shiftOffsetPx,
@@ -912,10 +904,10 @@ private fun PinnedPlanItem(
                 onGloballyPositioned(layoutCoordinates.boundsInRoot())
             }
             .graphicsLayer {
-                translationX = shiftAnim.value
-                alpha = alphaAnim.value
-                scaleX = scaleAnim.value
-                scaleY = scaleAnim.value
+                translationX = if (!isDragActive) 0f else shiftAnim.value
+                alpha = if (!isDragActive) 1f else alphaAnim.value
+                scaleX = if (!isDragActive) 1f else scaleAnim.value
+                scaleY = if (!isDragActive) 1f else scaleAnim.value
             }
             .then(
                 if (highlighted && isDragActive && !isDragging) Modifier.border(
@@ -1075,23 +1067,15 @@ private fun PlanCard(
 
     var cardTopLeft by remember { mutableStateOf(Offset.Zero) }
 
-    val alphaAnim = remember { Animatable(1f) }
-    val scaleAnim = remember { Animatable(1f) }
-    val translationYAnim = remember { Animatable(0f) }
+    val alphaAnim = remember(key1 = isDragging) { Animatable(1f) }
+    val scaleAnim = remember(key1 = isDragging) { Animatable(1f) }
+    val translationYAnim = remember(key1 = isDragging) { Animatable(0f) }
 
-    LaunchedEffect(isDragging) {
+    LaunchedEffect(isDragging, dragTranslationY) {
         if (isDragging) {
             alphaAnim.snapTo(0.3f)
             scaleAnim.snapTo(0.95f)
             translationYAnim.snapTo(dragTranslationY)
-        } else {
-            val animSpec = tween<Float>(
-                durationMillis = 280,
-                easing = EaseOutBack
-            )
-            launch { alphaAnim.animateTo(1f, animSpec) }
-            launch { scaleAnim.animateTo(1f, animSpec) }
-            launch { translationYAnim.animateTo(0f, animSpec) }
         }
     }
 
@@ -1108,10 +1092,10 @@ private fun PlanCard(
                 cardTopLeft = layoutCoordinates.boundsInRoot().topLeft
             }
             .graphicsLayer {
-                alpha = alphaAnim.value
-                scaleX = scaleAnim.value
-                scaleY = scaleAnim.value
-                translationY = translationYAnim.value
+                alpha = if (!isDragging) 1f else alphaAnim.value
+                scaleX = if (!isDragging) 1f else scaleAnim.value
+                scaleY = if (!isDragging) 1f else scaleAnim.value
+                translationY = if (!isDragging) 0f else translationYAnim.value
             }
             .then(
                 if (isCompleted) Modifier.border(

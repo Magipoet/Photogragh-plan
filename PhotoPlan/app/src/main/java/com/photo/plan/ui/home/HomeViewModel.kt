@@ -74,8 +74,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun reorderPinnedPlans(planIds: List<Long>) {
         viewModelScope.launch {
-            planIds.forEachIndexed { index, planId ->
-                planRepository.updatePinnedOrder(planId, index)
+            val database = (getApplication() as PhotoPlanApp).database
+            database.withTransaction {
+                planIds.forEachIndexed { index, planId ->
+                    planRepository.updatePinnedOrder(planId, index)
+                }
             }
         }
     }
