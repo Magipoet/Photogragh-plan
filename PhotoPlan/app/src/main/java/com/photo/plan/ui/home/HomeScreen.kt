@@ -313,7 +313,6 @@ fun HomeScreen(
                             newOrder.add(insertIndex, draggedPlan)
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.reorderPinnedPlans(newOrder.map { it.id })
-                            taskBarListState.scrollToItem(insertIndex.coerceAtLeast(0), 0)
                         }
                     }
                 } else {
