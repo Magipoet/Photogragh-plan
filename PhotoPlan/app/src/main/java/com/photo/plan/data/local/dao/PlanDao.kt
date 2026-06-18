@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.photo.plan.data.local.entity.PlanEntity
 import kotlinx.coroutines.flow.Flow
@@ -40,4 +41,11 @@ interface PlanDao {
 
     @Query("SELECT MAX(pinnedOrder) FROM plans WHERE isPinned = 1")
     suspend fun getMaxPinnedOrder(): Int?
+
+    @Transaction
+    suspend fun updatePinnedOrders(planIds: List<Long>) {
+        planIds.forEachIndexed { index, planId ->
+            updatePinnedOrder(planId, index)
+        }
+    }
 }
