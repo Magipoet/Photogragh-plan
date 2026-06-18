@@ -142,12 +142,6 @@ fun HomeScreen(
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
     val scope = rememberCoroutineScope()
 
-    val pinnedItemBounds = remember { mutableStateMapOf<Long, Rect>() }
-
-    fun updatePinnedItemBounds(planId: Long, bounds: Rect) {
-        pinnedItemBounds[planId] = bounds
-    }
-
     val activePlans by remember {
         derivedStateOf {
             plans.filter { plan ->
@@ -285,18 +279,6 @@ fun HomeScreen(
             previewBottom > taskBarBounds.top
     }
 
-    fun findPlanAtTaskBarPosition(globalPos: Offset): PlanEntity? {
-        for (plan in pinnedPlans) {
-            val bounds = pinnedItemBounds[plan.id] ?: continue
-            if (globalPos.x >= bounds.left && globalPos.x <= bounds.right &&
-                globalPos.y >= bounds.top && globalPos.y <= bounds.bottom
-            ) {
-                return plan
-            }
-        }
-        return null
-    }
-
     fun handleTaskBarDragEnd() {
         val finalDraggingPlanId = draggingPlanId
         val finalInsertIndex = targetInsertIndex
@@ -408,75 +390,6 @@ fun HomeScreen(
                 .onGloballyPositioned { layoutCoordinates ->
                     rootBoxTopLeft = layoutCoordinates.boundsInRoot().topLeft
                 }
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var currentPos = down.position
-                        val pressedPlan = findPlanAtTaskBarPosition(
-                            Offset(rootBoxTopLeft.x + currentPos.x, rootBoxTopLeft.y + currentPos.y)
-                        )
-
-                        var hasMoved = false
-                        var longPressTriggered = false
-                        val longPressTimeout = 500L
-                        val touchSlop = with(density) { 18.dp.toPx() }
-
-                        val longPressJob = scope.launch {
-                            delay(longPressTimeout)
-                            if (!hasMoved && pressedPlan != null) {
-                                longPressTriggered = true
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                isUserScrollEnabled = false
-                                draggingPlanId = pressedPlan.id
-                                isDraggingFromTaskBar = true
-                                dragPosition = Offset(rootBoxTopLeft.x + currentPos.x, rootBoxTopLeft.y + currentPos.y)
-                                isDragOver = isDragOverTaskBar()
-                            }
-                        }
-
-                        try {
-                            do {
-                                val event: PointerEvent = awaitPointerEvent(PointerEventPass.Initial)
-                                val change: PointerInputChange = event.changes.firstOrNull { it.id.value == down.id.value }
-                                    ?: event.changes.firstOrNull()
-                                    ?: break
-                                currentPos = change.position
-                                val globalX = rootBoxTopLeft.x + currentPos.x
-                                val globalY = rootBoxTopLeft.y + currentPos.y
-                                val globalPos = Offset(globalX, globalY)
-
-                                if (longPressTriggered && draggingPlanId != null) {
-                                    change.consume()
-                                    dragPosition = globalPos
-                                    isDragOver = isDragOverTaskBar()
-                                } else {
-                                    val dx = change.positionChange().x
-                                    val dy = change.positionChange().y
-                                    if (abs(dx) > touchSlop || abs(dy) > touchSlop) {
-                                        hasMoved = true
-                                        longPressJob.cancel()
-                                    }
-                                }
-                            } while (!event.changes.all { it.changedToUp() })
-
-                            longPressJob.cancel()
-
-                            if (longPressTriggered && draggingPlanId != null) {
-                                handleTaskBarDragEnd()
-                            }
-                        } catch (ce: androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException) {
-                            longPressJob.cancel()
-                            if (longPressTriggered && draggingPlanId != null) {
-                                handleTaskBarDragEnd()
-                            }
-                        } catch (t: Throwable) {
-                            longPressJob.cancel()
-                            if (longPressTriggered && draggingPlanId != null) {
-                                handleTaskBarDragEnd()
-                            }
-                        }
-                    }
-                }
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Card(
@@ -561,9 +474,6 @@ fun HomeScreen(
                                         plan = plan,
                                         onClick = { onNavigateToDetail(plan.id) },
                                         onUnpinRequest = { planToUnpin = plan },
-                                        onGloballyPositioned = { bounds ->
-                                            updatePinnedItemBounds(plan.id, bounds)
-                                        },
                                         isDragging = isThisPinnedDragging,
                                         shiftOffsetPx = when {
                                             shouldShiftRight -> with(density) { 158.dp.toPx() }
@@ -572,7 +482,22 @@ fun HomeScreen(
                                         },
                                         dimmed = dimmed,
                                         highlighted = isNearTargetSlot,
-                                        isDragActive = isDraggingFromTaskBar
+                                        isDragActive = isDraggingFromTaskBar,
+                                        onDragStart = { globalPosition ->
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            isUserScrollEnabled = false
+                                            draggingPlanId = plan.id
+                                            isDraggingFromTaskBar = true
+                                            dragPosition = globalPosition
+                                            isDragOver = isDragOverTaskBar()
+                                        },
+                                        onDrag = { globalPosition ->
+                                            dragPosition = globalPosition
+                                            isDragOver = isDragOverTaskBar()
+                                        },
+                                        onDragEnd = {
+                                            handleTaskBarDragEnd()
+                                        }
                                     )
                                 }
                             }
@@ -843,15 +768,19 @@ private fun PinnedPlanItem(
     plan: PlanEntity,
     onClick: () -> Unit,
     onUnpinRequest: () -> Unit,
-    onGloballyPositioned: (Rect) -> Unit,
     isDragging: Boolean,
     shiftOffsetPx: Float = 0f,
     dimmed: Boolean = false,
     highlighted: Boolean = false,
-    isDragActive: Boolean = false
+    isDragActive: Boolean = false,
+    onDragStart: (Offset) -> Unit = {},
+    onDrag: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {}
 ) {
     val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
+    var cardTopLeft by remember { mutableStateOf(Offset.Zero) }
 
     val pinnedShiftAnim = remember(plan.id) { Animatable(0f) }
     val pinnedAlphaAnim = remember(plan.id) { Animatable(1f) }
@@ -926,7 +855,7 @@ private fun PinnedPlanItem(
             .width(150.dp)
             .height(70.dp)
             .onGloballyPositioned { layoutCoordinates ->
-                onGloballyPositioned(layoutCoordinates.boundsInRoot())
+                cardTopLeft = layoutCoordinates.boundsInRoot().topLeft
             }
             .graphicsLayer {
                 translationX = pinnedShiftAnim.value
@@ -941,15 +870,28 @@ private fun PinnedPlanItem(
                     shape = RoundedCornerShape(8.dp)
                 ) else Modifier
             )
-            .then(
-                if (!isDragActive) {
-                    Modifier.clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        onClick = onClick
-                    )
-                } else Modifier
-            ),
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { startPosition ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onDragStart(cardTopLeft + startPosition)
+                    },
+                    onDrag = { change, _ ->
+                        onDrag(cardTopLeft + change.position)
+                    },
+                    onDragEnd = {
+                        onDragEnd()
+                    },
+                    onDragCancel = {
+                        onDragEnd()
+                    }
+                )
+            },
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 1.dp,
