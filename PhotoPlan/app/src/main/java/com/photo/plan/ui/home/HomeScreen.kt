@@ -330,7 +330,6 @@ fun HomeScreen(
                             val newOrder = otherPinnedPlans.toMutableList()
                             newOrder.add(insertIndex, draggedPlan)
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            pendingScrollToPlanId = finalDraggingPlanId
                             viewModel.reorderPinnedPlans(newOrder.map { it.id })
                         }
                     }
