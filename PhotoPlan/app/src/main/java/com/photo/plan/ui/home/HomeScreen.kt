@@ -142,7 +142,6 @@ fun HomeScreen(
     var showFilterMenu by remember { mutableStateOf(false) }
     var pendingScrollToPlanId by remember { mutableStateOf<Long?>(null) }
     var dragEndScrollTarget by remember { mutableStateOf<Int?>(null) }
-    var pendingDragReset by remember { mutableStateOf(false) }
 
     val taskBarListState = rememberLazyListState()
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
@@ -288,12 +287,6 @@ fun HomeScreen(
                     )
                 } catch (_: Exception) {}
             }
-            if (pendingDragReset) {
-                pendingDragReset = false
-                delay(50)
-                isDraggingFromTaskBar = false
-                isUserScrollEnabled = true
-            }
             return@LaunchedEffect
         }
 
@@ -339,13 +332,15 @@ fun HomeScreen(
         isDragOver = false
         dragPosition = Offset.Zero
         dragJustEnded = true
+        draggingPlanId = null
+        isDraggingFromTaskBar = false
+        isUserScrollEnabled = true
+        dragEndScrollTarget = null
 
         scope.launch {
             delay(200)
             dragJustEnded = false
         }
-
-        var hasDataChange = false
 
         if (wasDraggingFromTaskBar && finalDraggingPlanId != null) {
             if (finalIsDragOver) {
@@ -357,8 +352,6 @@ fun HomeScreen(
                     val insertIndex = targetIdx.coerceIn(0, otherPinnedPlans.size)
                     if (insertIndex != draggedIdx) {
                         dragEndScrollTarget = insertIndex
-                        pendingDragReset = true
-                        hasDataChange = true
                         val newOrder = otherPinnedPlans.toMutableList()
                         newOrder.add(insertIndex, draggedPlan)
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -366,30 +359,8 @@ fun HomeScreen(
                     }
                 }
             } else {
-                hasDataChange = true
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                 viewModel.unpinPlan(finalDraggingPlanId)
-            }
-        }
-
-        if (!hasDataChange) {
-            draggingPlanId = null
-            isDraggingFromTaskBar = false
-            isUserScrollEnabled = true
-            pendingDragReset = false
-            dragEndScrollTarget = null
-        } else {
-            draggingPlanId = null
-        }
-
-        scope.launch {
-            delay(500)
-            if (isDraggingFromTaskBar || !isUserScrollEnabled || draggingPlanId != null) {
-                draggingPlanId = null
-                isDraggingFromTaskBar = false
-                isUserScrollEnabled = true
-                pendingDragReset = false
-                dragEndScrollTarget = null
             }
         }
     }
