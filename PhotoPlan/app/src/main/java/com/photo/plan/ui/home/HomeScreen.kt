@@ -820,6 +820,7 @@ private fun PinnedPlanItem(
 ) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
+    val itemScope = rememberCoroutineScope()
     val interactionSource = remember { MutableInteractionSource() }
     var cardTopLeft by remember { mutableStateOf(Offset.Zero) }
 
@@ -925,7 +926,7 @@ private fun PinnedPlanItem(
                     var longPressFired = false
                     val initialPosition = down.position
 
-                    val longPressJob = launch {
+                    val longPressJob = itemScope.launch {
                         try {
                             delay(longPressTimeout)
                             longPressFired = true
