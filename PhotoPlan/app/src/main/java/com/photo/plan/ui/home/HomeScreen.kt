@@ -106,6 +106,7 @@ import com.photo.plan.ui.theme.White
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -505,49 +506,88 @@ fun HomeScreen(
 
                                         awaitEachGesture {
                                             val down = awaitFirstDown(requireUnconsumed = false)
-                                            var longPressJob: Job? = null
                                             var dragStarted = false
                                             var movedBeyondSlop = false
+                                            var longPressTriggered = false
                                             val downPosition = down.position
+                                            val downTime = System.currentTimeMillis()
 
-                                            try {
-                                                longPressJob = launch {
-                                                    delay(longPressTimeout)
-                                                    if (isUserScrollEnabled && !movedBeyondSlop) {
-                                                        val layoutInfo = taskBarListState.layoutInfo
-                                                        val visibleItems = layoutInfo.visibleItemsInfo
-                                                        val viewportStartOffset = layoutInfo.viewportStartOffset
-                                                        val xInContent = downPosition.x + viewportStartOffset
+                                            fun tryTriggerLongPress(): Boolean {
+                                                if (!isUserScrollEnabled) return false
+                                                val layoutInfo = taskBarListState.layoutInfo
+                                                val visibleItems = layoutInfo.visibleItemsInfo
+                                                val viewportStartOffset = layoutInfo.viewportStartOffset
+                                                val xInContent = downPosition.x + viewportStartOffset
 
-                                                        var targetPlan: PlanEntity? = null
-                                                        for (item in visibleItems) {
-                                                            val itemEnd = item.offset + item.size
-                                                            if (xInContent >= item.offset && xInContent < itemEnd) {
-                                                                val idx = item.index
-                                                                if (idx >= 0 && idx < pinnedPlans.size) {
-                                                                    targetPlan = pinnedPlans[idx]
-                                                                }
-                                                                break
-                                                            }
+                                                var targetPlan: PlanEntity? = null
+                                                for (item in visibleItems) {
+                                                    val itemEnd = item.offset + item.size
+                                                    if (xInContent >= item.offset && xInContent < itemEnd) {
+                                                        val idx = item.index
+                                                        if (idx >= 0 && idx < pinnedPlans.size) {
+                                                            targetPlan = pinnedPlans[idx]
                                                         }
-
-                                                        if (targetPlan != null) {
-                                                            dragStarted = true
-                                                            down.consume()
-                                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                            isUserScrollEnabled = false
-                                                            draggingPlanId = targetPlan.id
-                                                            isDraggingFromTaskBar = true
-                                                            val globalPos = taskBarLazyRowTopLeft + downPosition
-                                                            dragPosition = globalPos
-                                                            isDragOver = isDragOverTaskBar()
-                                                        }
+                                                        break
                                                     }
                                                 }
 
+                                                if (targetPlan != null) {
+                                                    dragStarted = true
+                                                    down.consume()
+                                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    isUserScrollEnabled = false
+                                                    draggingPlanId = targetPlan.id
+                                                    isDraggingFromTaskBar = true
+                                                    val globalPos = taskBarLazyRowTopLeft + downPosition
+                                                    dragPosition = globalPos
+                                                    isDragOver = isDragOverTaskBar()
+                                                    return true
+                                                }
+                                                return false
+                                            }
+
+                                            try {
                                                 while (true) {
-                                                    val event = awaitPointerEvent()
+                                                    val currentTime = System.currentTimeMillis()
+                                                    val remainingTimeout = (downTime + longPressTimeout) - currentTime
+                                                    val waitTimeout = if (!dragStarted && !movedBeyondSlop && !longPressTriggered && remainingTimeout > 0) {
+                                                        remainingTimeout.coerceAtMost(16L)
+                                                    } else {
+                                                        Long.MAX_VALUE
+                                                    }
+
+                                                    val result: Pair<PointerEvent?, Long> = if (waitTimeout == Long.MAX_VALUE) {
+                                                        awaitPointerEvent() to System.currentTimeMillis()
+                                                    } else {
+                                                        val ev = withTimeoutOrNull(waitTimeout) { awaitPointerEvent() }
+                                                        ev to System.currentTimeMillis()
+                                                    }
+                                                    val event = result.first
+                                                    val nowTime = result.second
+
+                                                    if (event == null) {
+                                                        if (!dragStarted && !movedBeyondSlop && !longPressTriggered) {
+                                                            if (nowTime - downTime >= longPressTimeout) {
+                                                                longPressTriggered = true
+                                                                tryTriggerLongPress()
+                                                            }
+                                                        }
+                                                        continue
+                                                    }
+
                                                     val change = event.changes.firstOrNull() ?: break
+
+                                                    if (!dragStarted && !movedBeyondSlop && !longPressTriggered) {
+                                                        val dx = change.position.x - downPosition.x
+                                                        val dy = change.position.y - downPosition.y
+                                                        val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+                                                        if (distance > touchSlop) {
+                                                            movedBeyondSlop = true
+                                                        } else if (currentTime - downTime >= longPressTimeout) {
+                                                            longPressTriggered = true
+                                                            tryTriggerLongPress()
+                                                        }
+                                                    }
 
                                                     if (dragStarted) {
                                                         change.consume()
@@ -560,23 +600,12 @@ fun HomeScreen(
                                                             break
                                                         }
                                                     } else {
-                                                        if (!movedBeyondSlop) {
-                                                            val dx = change.position.x - downPosition.x
-                                                            val dy = change.position.y - downPosition.y
-                                                            val distance = kotlin.math.sqrt(dx * dx + dy * dy)
-                                                            if (distance > touchSlop) {
-                                                                movedBeyondSlop = true
-                                                                longPressJob?.cancel()
-                                                                longPressJob = null
-                                                            }
-                                                        }
                                                         if (change.changedToUp()) {
                                                             break
                                                         }
                                                     }
                                                 }
                                             } finally {
-                                                longPressJob?.cancel()
                                                 if (dragStarted) {
                                                     handleTaskBarDragEnd()
                                                 }
