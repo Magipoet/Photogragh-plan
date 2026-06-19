@@ -88,6 +88,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -140,6 +141,7 @@ fun HomeScreen(
     var showFilterMenu by remember { mutableStateOf(false) }
     var pendingScrollToPlanId by remember { mutableStateOf<Long?>(null) }
     var dragEndScrollTarget by remember { mutableStateOf<Int?>(null) }
+    var pendingDragReset by remember { mutableStateOf(false) }
 
     val taskBarListState = rememberLazyListState()
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
@@ -160,6 +162,12 @@ fun HomeScreen(
                 val (total, completed) = progressMap[plan.id] ?: (0 to 0)
                 total > 0 && completed >= total
             }
+        }
+    }
+
+    val pinnedPlansDataVersion by remember {
+        derivedStateOf {
+            pinnedPlans.map { it.id }.hashCode()
         }
     }
 
@@ -279,6 +287,12 @@ fun HomeScreen(
                     )
                 } catch (_: Exception) {}
             }
+            if (pendingDragReset) {
+                pendingDragReset = false
+                delay(50)
+                isDraggingFromTaskBar = false
+                isUserScrollEnabled = true
+            }
             return@LaunchedEffect
         }
 
@@ -322,10 +336,8 @@ fun HomeScreen(
         val wasDraggingFromTaskBar = isDraggingFromTaskBar
 
         draggingPlanId = null
-        isDraggingFromTaskBar = false
         isDragOver = false
         dragPosition = Offset.Zero
-        isUserScrollEnabled = true
         dragJustEnded = true
 
         scope.launch {
@@ -334,6 +346,7 @@ fun HomeScreen(
         }
 
         scope.launch {
+            var needsReset = true
             if (wasDraggingFromTaskBar && finalDraggingPlanId != null) {
                 if (finalIsDragOver) {
                     val draggedPlan = currentPinnedPlans.find { it.id == finalDraggingPlanId }
@@ -344,6 +357,8 @@ fun HomeScreen(
                         val insertIndex = targetIdx.coerceIn(0, otherPinnedPlans.size)
                         if (insertIndex != draggedIdx) {
                             dragEndScrollTarget = insertIndex
+                            pendingDragReset = true
+                            needsReset = false
                             val newOrder = otherPinnedPlans.toMutableList()
                             newOrder.add(insertIndex, draggedPlan)
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -354,6 +369,10 @@ fun HomeScreen(
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     viewModel.unpinPlan(finalDraggingPlanId)
                 }
+            }
+            if (needsReset) {
+                isDraggingFromTaskBar = false
+                isUserScrollEnabled = true
             }
         }
     }
@@ -473,6 +492,9 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         if (pinnedPlans.isNotEmpty()) {
+                            val viewConfiguration = LocalViewConfiguration.current
+                            val touchSlop = viewConfiguration.touchSlop
+                            val longPressTimeout = viewConfiguration.longPressTimeoutMillis
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -480,56 +502,86 @@ fun HomeScreen(
                                         taskBarLazyRowTopLeft = layoutCoordinates.boundsInRoot().topLeft
                                     }
                                     .pointerInput(Unit) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = { startPosition ->
-                                                if (isUserScrollEnabled) {
-                                                    val layoutInfo = taskBarListState.layoutInfo
-                                                    val visibleItems = layoutInfo.visibleItemsInfo
-                                                    val viewportStartOffset = layoutInfo.viewportStartOffset
-                                                    val xInContent = startPosition.x + viewportStartOffset
 
-                                                    var targetPlan: PlanEntity? = null
-                                                    for (item in visibleItems) {
-                                                        val itemEnd = item.offset + item.size
-                                                        if (xInContent >= item.offset && xInContent < itemEnd) {
-                                                            val idx = item.index
-                                                            if (idx >= 0 && idx < pinnedPlans.size) {
-                                                                targetPlan = pinnedPlans[idx]
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false)
+                                            var longPressJob: Job? = null
+                                            var dragStarted = false
+                                            var movedBeyondSlop = false
+                                            val downPosition = down.position
+
+                                            try {
+                                                longPressJob = launch {
+                                                    delay(longPressTimeout)
+                                                    if (isUserScrollEnabled && !movedBeyondSlop) {
+                                                        val layoutInfo = taskBarListState.layoutInfo
+                                                        val visibleItems = layoutInfo.visibleItemsInfo
+                                                        val viewportStartOffset = layoutInfo.viewportStartOffset
+                                                        val xInContent = downPosition.x + viewportStartOffset
+
+                                                        var targetPlan: PlanEntity? = null
+                                                        for (item in visibleItems) {
+                                                            val itemEnd = item.offset + item.size
+                                                            if (xInContent >= item.offset && xInContent < itemEnd) {
+                                                                val idx = item.index
+                                                                if (idx >= 0 && idx < pinnedPlans.size) {
+                                                                    targetPlan = pinnedPlans[idx]
+                                                                }
+                                                                break
                                                             }
+                                                        }
+
+                                                        if (targetPlan != null) {
+                                                            dragStarted = true
+                                                            down.consume()
+                                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            isUserScrollEnabled = false
+                                                            draggingPlanId = targetPlan.id
+                                                            isDraggingFromTaskBar = true
+                                                            val globalPos = taskBarLazyRowTopLeft + downPosition
+                                                            dragPosition = globalPos
+                                                            isDragOver = isDragOverTaskBar()
+                                                        }
+                                                    }
+                                                }
+
+                                                while (true) {
+                                                    val event = awaitPointerEvent()
+                                                    val change = event.changes.firstOrNull() ?: break
+
+                                                    if (dragStarted) {
+                                                        change.consume()
+                                                        if (change.positionChange() != Offset.Zero) {
+                                                            val globalPos = taskBarLazyRowTopLeft + change.position
+                                                            dragPosition = globalPos
+                                                            isDragOver = isDragOverTaskBar()
+                                                        }
+                                                        if (change.changedToUp()) {
+                                                            break
+                                                        }
+                                                    } else {
+                                                        if (!movedBeyondSlop) {
+                                                            val dx = change.position.x - downPosition.x
+                                                            val dy = change.position.y - downPosition.y
+                                                            val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+                                                            if (distance > touchSlop) {
+                                                                movedBeyondSlop = true
+                                                                longPressJob?.cancel()
+                                                                longPressJob = null
+                                                            }
+                                                        }
+                                                        if (change.changedToUp()) {
                                                             break
                                                         }
                                                     }
-
-                                                    if (targetPlan != null) {
-                                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        isUserScrollEnabled = false
-                                                        draggingPlanId = targetPlan.id
-                                                        isDraggingFromTaskBar = true
-                                                        val globalPos = taskBarLazyRowTopLeft + startPosition
-                                                        dragPosition = globalPos
-                                                        isDragOver = isDragOverTaskBar()
-                                                    }
                                                 }
-                                            },
-                                            onDrag = { change, dragAmount ->
-                                                if (isDraggingFromTaskBar && draggingPlanId != null) {
-                                                    change.consume()
-                                                    val globalPos = taskBarLazyRowTopLeft + change.position
-                                                    dragPosition = globalPos
-                                                    isDragOver = isDragOverTaskBar()
-                                                }
-                                            },
-                                            onDragEnd = {
-                                                if (isDraggingFromTaskBar && draggingPlanId != null) {
-                                                    handleTaskBarDragEnd()
-                                                }
-                                            },
-                                            onDragCancel = {
-                                                if (isDraggingFromTaskBar && draggingPlanId != null) {
+                                            } finally {
+                                                longPressJob?.cancel()
+                                                if (dragStarted) {
                                                     handleTaskBarDragEnd()
                                                 }
                                             }
-                                        )
+                                        }
                                     }
                             ) {
                                 LazyRow(
@@ -575,7 +627,8 @@ fun HomeScreen(
                                             },
                                             dimmed = dimmed,
                                             highlighted = isNearTargetSlot,
-                                            isDragActive = isDraggingFromTaskBar
+                                            isDragActive = isDraggingFromTaskBar,
+                                            dataVersion = pinnedPlansDataVersion
                                         )
                                     }
                                 }
@@ -859,7 +912,8 @@ private fun PinnedPlanItem(
     shiftOffsetPx: Float = 0f,
     dimmed: Boolean = false,
     highlighted: Boolean = false,
-    isDragActive: Boolean = false
+    isDragActive: Boolean = false,
+    dataVersion: Int = 0
 ) {
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -867,6 +921,14 @@ private fun PinnedPlanItem(
     val pinnedShiftAnim = remember(plan.id) { Animatable(0f) }
     val pinnedAlphaAnim = remember(plan.id) { Animatable(1f) }
     val pinnedScaleAnim = remember(plan.id) { Animatable(1f) }
+
+    LaunchedEffect(dataVersion) {
+        if (!isDragActive) {
+            pinnedShiftAnim.snapTo(0f)
+            pinnedAlphaAnim.snapTo(1f)
+            pinnedScaleAnim.snapTo(1f)
+        }
+    }
 
     LaunchedEffect(isDragActive, shiftOffsetPx, isDragging, dimmed) {
         if (isDragActive) {
