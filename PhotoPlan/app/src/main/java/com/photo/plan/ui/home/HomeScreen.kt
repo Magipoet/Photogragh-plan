@@ -138,7 +138,7 @@ fun HomeScreen(
     var showCompletedPlans by remember { mutableStateOf(true) }
     var showFilterMenu by remember { mutableStateOf(false) }
     var pendingScrollToPlanId by remember { mutableStateOf<Long?>(null) }
-    var dragEndPositionInfo by remember { mutableStateOf<Pair<Int, Float>?>(null) }
+    var dragEndScrollTarget by remember { mutableStateOf<Int?>(null) }
 
     val taskBarListState = rememberLazyListState()
     var autoScrollJob by remember { mutableStateOf<Job?>(null) }
@@ -267,15 +267,14 @@ fun HomeScreen(
     }
 
     LaunchedEffect(pinnedPlans) {
-        val posInfo = dragEndPositionInfo
-        if (posInfo != null) {
-            dragEndPositionInfo = null
-            val (targetIndex, previewLeftInTaskbar) = posInfo
-            if (targetIndex >= 0 && targetIndex < pinnedPlans.size) {
+        val targetIdx = dragEndScrollTarget
+        if (targetIdx != null) {
+            dragEndScrollTarget = null
+            if (targetIdx >= 0 && targetIdx < pinnedPlans.size) {
                 try {
                     taskBarListState.scrollToItem(
-                        index = targetIndex,
-                        scrollOffset = -previewLeftInTaskbar.toInt()
+                        index = targetIdx,
+                        scrollOffset = 0
                     )
                 } catch (_: Exception) {}
             }
@@ -343,9 +342,7 @@ fun HomeScreen(
                         val targetIdx = if (finalInsertIndex >= 0) finalInsertIndex else draggedIdx
                         val insertIndex = targetIdx.coerceIn(0, otherPinnedPlans.size)
                         if (insertIndex != draggedIdx) {
-                            val previewWidthPx = with(density) { 150.dp.toPx() }
-                            val previewLeftInTaskbar = dragPosition.x - previewWidthPx / 2 - taskBarBounds.left
-                            dragEndPositionInfo = Pair(insertIndex, previewLeftInTaskbar)
+                            dragEndScrollTarget = insertIndex
                             val newOrder = otherPinnedPlans.toMutableList()
                             newOrder.add(insertIndex, draggedPlan)
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -920,21 +917,69 @@ private fun PinnedPlanItem(
                 onClick = onClick
             )
             .pointerInput(Unit) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { startPosition ->
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onDragStart(cardTopLeft + startPosition)
-                    },
-                    onDrag = { change, _ ->
-                        onDrag(cardTopLeft + change.position)
-                    },
-                    onDragEnd = {
-                        onDragEnd()
-                    },
-                    onDragCancel = {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    down.consume()
+                    val longPressTimeout = 500L
+                    val touchSlopPx = with(density) { 18.dp.toPx() }
+                    var longPressFired = false
+                    val initialPosition = down.position
+
+                    val longPressJob = launch {
+                        try {
+                            delay(longPressTimeout)
+                            longPressFired = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val startGlobal = cardTopLeft + initialPosition
+                            onDragStart(startGlobal)
+                        } catch (_: Exception) {
+                        }
+                    }
+
+                    var cancelled = false
+
+                    while (true) {
+                        val event: PointerEvent = awaitPointerEvent(PointerEventPass.Main)
+                        val change = event.changes.firstOrNull()
+                        if (change == null || change.changedToUp()) {
+                            longPressJob.cancel()
+                            if (longPressFired) {
+                                if (change != null) change.consume()
+                                onDragEnd()
+                            } else if (change != null) {
+                                change.consume()
+                            }
+                            break
+                        }
+                        if (!change.pressed) {
+                            longPressJob.cancel()
+                            if (longPressFired) {
+                                onDragEnd()
+                            }
+                            break
+                        }
+
+                        if (!longPressFired) {
+                            val displacement = change.position - initialPosition
+                            val distanceSq = displacement.x * displacement.x + displacement.y * displacement.y
+                            if (distanceSq > touchSlopPx * touchSlopPx) {
+                                longPressJob.cancel()
+                                cancelled = true
+                                break
+                            }
+                            change.consume()
+                            continue
+                        }
+
+                        change.consume()
+                        val currentGlobal = cardTopLeft + change.position
+                        onDrag(currentGlobal)
+                    }
+
+                    if (cancelled && longPressFired) {
                         onDragEnd()
                     }
-                )
+                }
             },
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(
