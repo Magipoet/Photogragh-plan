@@ -600,8 +600,9 @@ fun HomeScreen(
                                                     }
 
                                                     if (dragStarted) {
+                                                        val delta = change.positionChange()
                                                         change.consume()
-                                                        if (change.positionChange() != Offset.Zero) {
+                                                        if (delta != Offset.Zero) {
                                                             val globalPos = taskBarLazyRowTopLeft + change.position
                                                             dragPosition = globalPos
                                                             isDragOver = isDragOverTaskBar()
