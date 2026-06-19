@@ -376,6 +376,16 @@ fun HomeScreen(
                 isUserScrollEnabled = true
             }
         }
+
+        scope.launch {
+            delay(500)
+            if (isDraggingFromTaskBar || !isUserScrollEnabled) {
+                isDraggingFromTaskBar = false
+                isUserScrollEnabled = true
+                pendingDragReset = false
+                dragEndScrollTarget = null
+            }
+        }
     }
 
     Scaffold(
@@ -969,30 +979,9 @@ private fun PinnedPlanItem(
             }
             val targetScaleVal = if (isDragging) 0.92f else 1f
 
-            val shiftJob = launch {
-                pinnedShiftAnim.animateTo(
-                    targetValue = targetShiftVal,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                )
-            }
-            val alphaJob = launch {
-                pinnedAlphaAnim.animateTo(
-                    targetValue = targetAlphaVal,
-                    animationSpec = tween(durationMillis = 180)
-                )
-            }
-            val scaleJob = launch {
-                pinnedScaleAnim.animateTo(
-                    targetValue = targetScaleVal,
-                    animationSpec = tween(durationMillis = 150)
-                )
-            }
-            shiftJob.join()
-            alphaJob.join()
-            scaleJob.join()
+            pinnedShiftAnim.snapTo(targetShiftVal)
+            pinnedAlphaAnim.snapTo(targetAlphaVal)
+            pinnedScaleAnim.snapTo(targetScaleVal)
         } else {
             val resetAnimSpec = tween<Float>(durationMillis = 200)
             val shiftJob = launch { pinnedShiftAnim.animateTo(0f, resetAnimSpec) }
