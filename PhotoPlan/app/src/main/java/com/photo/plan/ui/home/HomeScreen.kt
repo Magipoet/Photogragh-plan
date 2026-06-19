@@ -133,6 +133,7 @@ fun HomeScreen(
     var isDraggingFromTaskBar by remember { mutableStateOf(false) }
     var isUserScrollEnabled by remember { mutableStateOf(true) }
     var dragJustEnded by remember { mutableStateOf(false) }
+    var gestureResetVersion by remember { mutableStateOf(0) }
 
     var taskBarBounds by remember { mutableStateOf(Rect.Zero) }
     var rootBoxTopLeft by remember { mutableStateOf(Offset.Zero) }
@@ -306,6 +307,23 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(draggingPlanId, isDraggingFromTaskBar) {
+        if (draggingPlanId == null && isDraggingFromTaskBar) {
+            isDraggingFromTaskBar = false
+            isUserScrollEnabled = true
+            isDragOver = false
+            dragPosition = Offset.Zero
+            gestureResetVersion++
+        }
+        if (!isDraggingFromTaskBar && !isUserScrollEnabled) {
+            delay(300)
+            if (!isDraggingFromTaskBar && !isUserScrollEnabled) {
+                isUserScrollEnabled = true
+                gestureResetVersion++
+            }
+        }
+    }
+
     fun isDragOverTaskBar(): Boolean {
         if (draggingPlanId == null) return false
         val previewWidthPx = with(density) { 150.dp.toPx() }
@@ -363,6 +381,8 @@ fun HomeScreen(
                 viewModel.unpinPlan(finalDraggingPlanId)
             }
         }
+
+        gestureResetVersion++
     }
 
     Scaffold(
@@ -489,7 +509,7 @@ fun HomeScreen(
                                     .onGloballyPositioned { layoutCoordinates ->
                                         taskBarLazyRowTopLeft = layoutCoordinates.boundsInRoot().topLeft
                                     }
-                                    .pointerInput(Unit) {
+                                    .pointerInput(gestureResetVersion) {
 
                                         awaitEachGesture {
                                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -936,9 +956,21 @@ private fun PinnedPlanItem(
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val pinnedShiftAnim = remember(plan.id) { Animatable(0f) }
-    val pinnedAlphaAnim = remember(plan.id) { Animatable(1f) }
-    val pinnedScaleAnim = remember(plan.id) { Animatable(1f) }
+    val pinnedShiftAnim = remember(
+        key1 = plan.id,
+        key2 = isDragActive,
+        key3 = isDragging
+    ) { Animatable(0f) }
+    val pinnedAlphaAnim = remember(
+        key1 = plan.id,
+        key2 = isDragActive,
+        key3 = isDragging
+    ) { Animatable(1f) }
+    val pinnedScaleAnim = remember(
+        key1 = plan.id,
+        key2 = isDragActive,
+        key3 = isDragging
+    ) { Animatable(1f) }
 
     LaunchedEffect(dataVersion) {
         if (!isDragActive) {
@@ -962,13 +994,9 @@ private fun PinnedPlanItem(
             pinnedAlphaAnim.snapTo(targetAlphaVal)
             pinnedScaleAnim.snapTo(targetScaleVal)
         } else {
-            val resetAnimSpec = tween<Float>(durationMillis = 200)
-            val shiftJob = launch { pinnedShiftAnim.animateTo(0f, resetAnimSpec) }
-            val alphaJob = launch { pinnedAlphaAnim.animateTo(1f, resetAnimSpec) }
-            val scaleJob = launch { pinnedScaleAnim.animateTo(1f, resetAnimSpec) }
-            shiftJob.join()
-            alphaJob.join()
-            scaleJob.join()
+            pinnedShiftAnim.snapTo(0f)
+            pinnedAlphaAnim.snapTo(1f)
+            pinnedScaleAnim.snapTo(1f)
         }
     }
 
@@ -996,10 +1024,10 @@ private fun PinnedPlanItem(
             .width(150.dp)
             .height(70.dp)
             .graphicsLayer {
-                translationX = pinnedShiftAnim.value
-                alpha = pinnedAlphaAnim.value
-                scaleX = pinnedScaleAnim.value
-                scaleY = pinnedScaleAnim.value
+                translationX = if (!isDragActive) 0f else pinnedShiftAnim.value
+                alpha = if (!isDragActive) 1f else pinnedAlphaAnim.value
+                scaleX = if (!isDragActive) 1f else pinnedScaleAnim.value
+                scaleY = if (!isDragActive) 1f else pinnedScaleAnim.value
             }
             .then(
                 if (highlighted && isDragActive && !isDragging) Modifier.border(
